@@ -1,15 +1,17 @@
-# Private Casino on Zcash — Build Plan (ZECATHON, Wildcard)
+# Zecasino — Build Plan (ZECATHON, Wildcard)
+
+**Zecasino — the shielded casino. *Play in the shielded pool.*** Name chosen by Chris on Oct 20.
 
 Deadline: **Oct 28 2026 23:59 UTC (00:59 WAT Oct 29)**. Repo local until submission; push public before deadline. All code written in-window.
 
 Why it matters: every Zcash casino listed today (Cloudbet, BC.Game, Spinly, Bspin, Rakebit) hands out **transparent** t-addresses — none accept shielded deposits (cryptoslate.com/crypto-casinos/zcash-casinos). We are the first casino where the ledger never learns who plays.
 
-## 1. Name (clash check, Oct 20)
-| Name | Clash check | Verdict |
-|---|---|---|
-| **The Blind Table** | Only "The Big Blind" (San Antonio cardhouse). No crypto casino. | **Recommended** — poker pun (blind) + privacy |
-| Masquerade | No crypto casino found in search; generic word, harder SEO | OK |
-| Zcasino | 2001 TI-83 game only, but too close to **ZKasino** (2024 rug-pull scandal) | Avoid |
+## 1. Name & brand
+**Zecasino** (chosen). To avoid any confusion with **ZKasino** (2024 rug-pull), branding is unmistakably Zcash:
+- Wordmark "ZECASINO" with the Zcash gold (#F4B728) "Z" ⓩ mark set as a casino chip; tagline **"Play in the shielded pool."** Sub-line: "No accounts. No transparent addresses. Provably fair."
+- Palette: Zcash gold #F4B728 + deep black #0B0B0C, emerald felt #0E3B2E, ivory #F3ECDD; chips denominated in ZEC/TAZ with the ⓩ glyph.
+- Footer + about copy: "Built on Zcash Orchard/Ironwood shielded pools. Not affiliated with ZKasino."
+(Earlier candidates The Blind Table / Masquerade dropped.)
 
 ## 2. Games — each with a privacy reason to exist
 PvP (privacy = hidden information between players AND from the house):
