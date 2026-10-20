@@ -1,0 +1,34 @@
+   Compiling clap_builder v4.6.7
+   Compiling unicode-normalization v0.1.25
+   Compiling ml-kem v0.2.3
+   Compiling scrypt v0.11.0
+   Compiling age-core v0.12.0
+   Compiling i18n-embed-fl v0.10.1
+   Compiling phf_macros v0.11.3
+   Compiling clap_derive v4.6.7
+   Compiling iso_country v0.1.4
+   Compiling rand_distr v0.6.0
+   Compiling rtoolbox v0.0.5
+   Compiling wsl v0.1.0
+   Compiling pastey v0.2.3
+   Compiling iana-time-zone v0.1.65
+   Compiling clap v4.6.7
+   Compiling age v0.12.1
+   Compiling chrono v0.4.45
+   Compiling rpassword v7.5.4
+   Compiling phf v0.11.3
+   Compiling ed25519-zebra v4.2.0
+   Compiling uint v0.10.2
+   Compiling tokio-socks v0.5.3
+   Compiling rusqlite v0.37.0
+   Compiling tor-dirmgr v0.43.0
+   Compiling schemerz-rusqlite v0.371.0
+   Compiling arti-client v0.43.0
+   Compiling zcash_pool_migration v0.2.0-pre.2 (https://github.com/zcash/librustzcash.git?rev=eb38d7a373661179dbc083a2fd58b3a6c9b25818#eb38d7a3)
+   Compiling zcash_client_sqlite v0.23.0-pre.2 (https://github.com/zcash/librustzcash.git?rev=eb38d7a373661179dbc083a2fd58b3a6c9b25818#eb38d7a3)
+   Compiling zcash-devtool v0.1.0 (/workspace/zcasino/spike/zcash-devtool)
+    Finished `release` profile [optimized] target(s) in 2m 34s
+
+real	2m34.983s
+user	14m1.923s
+sys	0m59.750s
