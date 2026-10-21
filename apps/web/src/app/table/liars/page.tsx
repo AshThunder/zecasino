@@ -110,7 +110,8 @@ export default function Liars() {
           const mineOk = (await pvpCommit(unhex(m.salt), new Uint8Array(m.dice))) === m.commitments[m.seat].commitment;
           setPlayers((m.commitments as { anon: string; commitment: string }[]).map((cm, i) => ({ anon: cm.anon, name: i === m.seat ? "You" : m.opponent_house ? "House player" : `anon · ${cm.anon}`, dice: i === m.seat ? m.dice : null, commitment: cm.commitment, chip: i === m.seat ? 0.5 : 0.05, me: i === m.seat, ok: i === m.seat ? mineOk : undefined })));
           setTurn(m.turn === m.seat ? 0 : 1); setBid(null); setQ(2); setF(4);
-          shake(() => setPhase("bid"));
+          // Game state never waits on the animation: a stalled tween (e.g. after a reveal) must not freeze the round.
+          setPhase("bid"); shake(() => {});
         }),
         c.on("liars_bid", m => {
           const ps = playersRef.current; const meAnon = ps.find(p => p.me)?.anon;

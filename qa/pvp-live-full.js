@@ -24,7 +24,8 @@ async function step(game, pages) {
 }
 const round = (game, pages, ms = 60000) => until(() => step(game, pages), ms);
 async function leaveHoldem(pages) { for (const p of pages) { await until(() => vis(p, "Leave table"), 15000); await click(p, "Leave table"); } for (const p of pages) await until(() => vis(p, /^Sit down/), 15000); }
-async function lobbyOf(p, game) { await p.goto(B + `/table/${game}`, { waitUntil: "networkidle" }); await p.waitForTimeout(1200); }
+async function lobbyOf(p, game) { await p.goto(B + `/table/${game}`, { waitUntil: "networkidle" }); await p.waitForTimeout(1200);
+  if (process.env.DBG) { const h = []; for (let i = 0; i < 6; i++) { h.push(await p.locator(".stake-pick").count() + ":" + (await p.locator("main").innerText()).slice(0, 80).replace(/\n/g, " ")); await p.waitForTimeout(500); } console.log("DBG", game, h.join(" || ")); } }
 async function reset(p) { for (const n of ["Leave queue", "Leave table"]) if (await vis(p, n)) { await click(p, n); await p.waitForTimeout(800); } }
 (async () => { const br = await q.launch();
   const mk = async (w, h, mob, nm) => { const c = await br.newContext({ viewport: { width: w, height: h }, isMobile: mob, hasTouch: mob, deviceScaleFactor: mob ? 2 : 1 });
@@ -48,7 +49,8 @@ async function reset(p) { for (const n of ["Leave queue", "Leave table"]) if (aw
       const off = await until(() => vis(C, "Accept rematch"), 12000); rec(game, "rematch offer reaches opponent", !!off);
       await C.screenshot({ path: SH + `${game}-rematch-offer-mobile.png` });
       if (off) { await click(C, "Accept rematch");
-        const again = await until(async () => (await inGame[game](A)) && (await inGame[game](C)) && !(await vis(A, /^Rematch$/)), 15000);
+        const live = async p => !(await vis(p, /^Rematch$|Accept rematch|Waiting for opponent/)) && (game === "holdem" ? (await p.locator(".result-toast").count()) === 0 : (await p.locator(".turn-clock").count()) > 0);
+        const again = await until(async () => (await inGame[game](A)) && (await inGame[game](C)) && await live(A) && await live(C), 15000);
         rec(game, "rematch deals a new round", !!again);
         rec(game, "rematch round completes", !!(again && await round(game, [A, C])));
         await A.screenshot({ path: SH + `${game}-rematch-done-desktop.png` }); }
