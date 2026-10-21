@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { DEPOSIT, zip321 } from "@/lib/mock";
 import { getClient, toZat } from "@/lib/server";
 import { ZMark } from "./ZMark";
 
@@ -14,16 +13,17 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [live, setLive] = useState<{ address: string } | null>(null);
   const [wd, setWd] = useState<{ ok: boolean; text: string } | null>(null);
   const [credited, setCredited] = useState<string | null>(null);
-  const address = live?.address ?? DEPOSIT.address;
-  const uri = live ? `zcash:${live.address}?amount=${DEPOSIT.amount}` : zip321(DEPOSIT.address, DEPOSIT.amount, DEPOSIT.memoTag);
+  const [offline, setOffline] = useState(false);
+  const address = live?.address ?? "";
+  const uri = live ? `zcash:${live.address}` : "";
 
   // Live cashier: this session's own Orchard-only address from zec-service, so no memo is needed.
   useEffect(() => {
     if (!open) return;
     let off = () => {};
     getClient().then(async c => {
-      if (!c) return;
-      try { const r = await c.rpc({ t: "cashier_deposit" }); setLive({ address: r.address }); } catch { setLive(null); }
+      if (!c) { setOffline(true); return; }
+      try { const r = await c.rpc({ t: "cashier_deposit" }); setLive({ address: r.address }); setOffline(false); } catch { setLive(null); setOffline(true); }
       off = c.on("deposit", m => setCredited(`ⓩ ${(m.zat / 1e8).toFixed(4)} credited`));
     });
     return () => off();
@@ -38,6 +38,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
   };
 
   useEffect(() => {
+    if (!uri) { setQr(""); return; }
     QRCode.toDataURL(uri, { margin: 1, width: 440, errorCorrectionLevel: "H", color: { dark: "#14110A", light: "#FBF7EE" } }).then(setQr);
   }, [uri]);
   useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal(); if (!open && d.open) d.close(); }, [open]);
@@ -58,18 +59,16 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
       {tab === "deposit" ? (
         <div className="dep">
           <div className="qr-wrap">
-            {qr && <img src={qr} alt="ZIP-321 payment QR" width={220} height={220} />}
+            {qr ? <img src={qr} alt="ZIP-321 payment QR" width={220} height={220} /> : <div className="qr-skel" aria-hidden="true" />}
             <span className="qr-badge"><ZMark size={34} /></span>
           </div>
           <div className="dep-info">
             <label>One-time shielded deposit address <em>Orchard · Ironwood</em></label>
-            <div className="mono addr">{address}</div>
-            <button className="btn ghost sm" onClick={() => copy("a", address)}>{copied === "a" ? "Copied" : "Copy address"}</button>
-            {!live && <><label>Memo tag <em>matches the deposit to this session</em></label>
-            <div className="mono memo">{DEPOSIT.memoTag}</div></>}
-            <button className="btn ghost sm" onClick={() => copy("u", uri)}>{copied === "u" ? "Copied" : "Copy payment link"}</button>
+            {live ? <div className="mono addr">{address}</div> : <div className="addr-skel" role="status">{offline ? "Cashier offline. Deposits open when the wallet service is reachable." : <>Deriving your one-time address<span className="dots" /></>}</div>}
+            <button className="btn ghost sm" disabled={!live} onClick={() => copy("a", address)}>{copied === "a" ? "Copied" : "Copy address"}</button>
+            <button className="btn ghost sm" disabled={!live} onClick={() => copy("u", uri)}>{copied === "u" ? "Copied" : "Copy payment link"}</button>
             <ol className="steps">
-              <li className="done">{live ? "Address derived for this session only; it identifies your deposit, no memo needed" : `Address derived for this session (diversifier #${DEPOSIT.diversifierIndex})`}</li>
+              <li className={live ? "done" : ""}>Address derived for this session only; it identifies your deposit, no memo needed</li>
               {credited && <li className="done">{credited}</li>}
               <li className="live"><span className="pulse" />Watching with the house viewing key…</li>
               <li>3 confirmations · about 75 s on NU7 testnet</li>
@@ -77,7 +76,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
           </div>
           <ul className="assure">
             <li>No transparent receiver. Never reused.</li>
-            <li>{live ? "Only the house viewing key can see what reached this address." : "The memo is encrypted; only the house viewing key can read it."}</li>
+            <li>Only the house viewing key can see what reached this address.</li>
             <li>Send from a shielded wallet: Zashi, Zingo, YWallet.</li>
           </ul>
         </div>

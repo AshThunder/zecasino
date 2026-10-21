@@ -77,14 +77,18 @@ async fn main() -> anyhow::Result<()> {
             let svc = Arc::new(Svc { db: Mutex::new(db), reserve, client: Mutex::new(client.unwrap()), cfg: c });
             let s2 = svc.clone();
             tokio::spawn(async move { loop {
+                // Each sync is bounded: a stalled lightwalletd stream must not hold the wallet lock (and every API call) forever.
+                const SYNC_LIMIT: Duration = Duration::from_secs(120);
                 { let mut db = s2.db.lock().await; let mut cl = s2.client.lock().await;
-                  if let Err(e) = wallet::sync(&mut db, &mut cl).await { tracing::warn!("sync failed: {e:#}"); }
-                  if let Some(r) = &s2.reserve { if let Err(e) = wallet::sync(&mut *r.lock().await, &mut cl).await { tracing::warn!("reserve sync failed: {e:#}"); } } }
+                  let mut stalled = false;
+                  match tokio::time::timeout(SYNC_LIMIT, wallet::sync(&mut db, &mut cl)).await { Ok(Err(e)) => tracing::warn!("sync failed: {e:#}"), Err(_) => { tracing::warn!("sync stalled; reconnecting"); stalled = true; } _ => {} }
+                  if let (false, Some(r)) = (stalled, &s2.reserve) { match tokio::time::timeout(SYNC_LIMIT, wallet::sync(&mut *r.lock().await, &mut cl)).await { Ok(Err(e)) => tracing::warn!("reserve sync failed: {e:#}"), Err(_) => { tracing::warn!("reserve sync stalled; reconnecting"); stalled = true; } _ => {} } }
+                  if stalled { match wallet::connect(&s2.cfg.lwd).await { Ok(c) => *cl = c, Err(e) => tracing::warn!("reconnect failed: {e:#}") } } }
                 tokio::time::sleep(Duration::from_secs(20)).await;
             } });
             let app = Router::new()
                 .route("/status", get(api_status)).route("/address", post(api_address))
-                .route("/deposits", get(api_deposits)).route("/withdraw", post(api_withdraw)).route("/reserve", get(api_reserve))
+                .route("/deposits", get(api_deposits)).route("/withdraw", post(api_withdraw)).route("/reserve", get(api_reserve)).route("/chain", get(api_chain))
                 .with_state(svc.clone());
             let addr = svc.cfg.api.clone();
             tracing::info!(%addr, lwd = %svc.cfg.lwd, "zec-service listening");
@@ -111,6 +115,12 @@ async fn api_reserve(State(s): State<Arc<Svc>>) -> ApiResult {
         "tip": db.chain_height().map_err(|e| ise(e.into()))?.map(u32::from), "total_zat": total, "network": "testnet" })))
 }
 
+/// Public: tip + block hash and transparent-output counts for the hot and the reserve wallet.
+async fn api_chain(State(s): State<Arc<Svc>>) -> ApiResult {
+    let (tip, hash, hi, ho) = wallet::chain_facts(&s.cfg.db).map_err(ise)?;
+    let (ri, ro) = wallet::chain_facts(&s.cfg.reserve_db).map(|f| (f.2, f.3)).unwrap_or((0, 0));
+    Ok(Json(json!({ "tip": tip, "hash": hash, "transparent_received": hi + ri, "transparent_sent": ho + ro, "network": "testnet" })))
+}
 type ApiResult = Result<Json<Value>, (StatusCode, String)>;
 fn auth(s: &Svc, h: &HeaderMap) -> Result<(), (StatusCode, String)> {
     let ok = h.get("authorization").and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")) == s.cfg.key.as_deref();

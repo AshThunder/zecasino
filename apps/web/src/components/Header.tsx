@@ -1,15 +1,62 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ZMark } from "./ZMark";
 import { CashierDialog } from "./CashierDialog";
-import { SESSION } from "@/lib/mock";
 import { useSyncExternalStore } from "react";
 import { getClient, serverState, SESSION_KEY, KEEP_KEY } from "@/lib/server";
 import { isMuted, setMuted } from "@/lib/sfx";
 
-const NAV = [["Lobby", "/"], ["Carrot in a Box", "/table/carrot"], ["Roulette", "/table/roulette"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
+import { GAMES } from "@/lib/games";
+const NAV = [["Lobby", "/"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
+const PVP = GAMES.filter(g => g.kind.startsWith("Player")), HOUSE = GAMES.filter(g => !PVP.includes(g));
+
+/** Games menu: all seven tables, grouped. Opens on click or keyboard, closes on Escape / outside click / navigation. */
+function GamesMenu({ path }: { path: string }) {
+  const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { setOpen(false); }, [path]);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", off); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const on = path.startsWith("/table/");
+  return (
+    <div className="games-menu" ref={ref}>
+      <button className={on || open ? "on" : ""} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(o => !o)}>
+        Games <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="m2 3.5 3 3 3-3" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
+      </button>
+      {open && <div className="games-pop" role="menu">
+        {[["Player vs player", PVP], ["House games", HOUSE]].map(([h, list]) => (
+          <div key={h as string} className="gp-col"><small>{h as string}</small>
+            {(list as typeof GAMES).map(g => <Link key={g.id} role="menuitem" href={g.href} className={path === g.href ? "on" : ""}><b>{g.name}</b><span>{g.kind}</span></Link>)}
+          </div>))}
+      </div>}
+    </div>
+  );
+}
+
+/** Small screens: one sheet with every table and page. */
+function MobileMenu({ path }: { path: string }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [path]);
+  useEffect(() => { document.body.classList.toggle("menu-open", open); }, [open]);
+  return (<>
+    <button className="icon-btn burger" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(o => !o)}>
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">{open ? <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" /> : <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" />}</svg>
+    </button>
+    {open && createPortal(<nav className="mobile-sheet" aria-label="Menu">
+      <Link href="/" className={path === "/" ? "on" : ""}>Lobby</Link>
+      <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
+      <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
+      <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link>
+    </nav>, document.body)}
+  </>);
+}
 
 export function Header() {
   const live = useSyncExternalStore(serverState.subscribe, serverState.get, serverState.server);
@@ -25,7 +72,9 @@ export function Header() {
         <span className="brand-text"><span className="wordmark">ZECASINO</span><span className="tag">Play in the shielded pool</span></span>
       </Link>
       <nav className="nav" aria-label="Main">
-        {NAV.map(([l, h]) => <Link key={h} href={h} className={path === h ? "on" : ""}>{l}</Link>)}
+        <Link href="/" className={path === "/" ? "on" : ""}>Lobby</Link>
+        <GamesMenu path={path} />
+        {NAV.slice(1).map(([l, h]) => <Link key={h} href={h} className={path === h ? "on" : ""}>{l}</Link>)}
       </nav>
       <div className="hdr-right">
         <button className="shield-pill" title="Session key: save it to come back to this balance" aria-expanded={keyOpen} onClick={() => setKeyOpen(o => !o)}>
@@ -33,11 +82,12 @@ export function Header() {
           Shielded session
         </button>
         {keyOpen && <SessionKey onClose={() => setKeyOpen(false)} />}
-        <span className="balance"><small>Balance</small><b>ⓩ {(live.balance ?? SESSION.balance).toFixed(4)}</b><small>TAZ</small></span>
+        <span className="balance"><small>Balance</small><b>{live.balance == null ? <span className="skel" /> : `ⓩ ${live.balance.toFixed(4)}`}</b><small>TAZ</small></span>
         <button className="icon-btn" aria-label={muted ? "Unmute" : "Mute"} onClick={() => { setMuted(!muted); setM(!muted); }}>
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />{muted ? <path d="m16 9 5 6m0-6-5 6" stroke="currentColor" strokeWidth="2" /> : <path d="M16 8a5 5 0 0 1 0 8M18.5 5.5a8.5 8.5 0 0 1 0 13" stroke="currentColor" strokeWidth="2" fill="none" />}</svg>
         </button>
         <button className="btn gold" onClick={() => setOpen(true)}>Cashier</button>
+        <MobileMenu path={path} />
       </div>
       <CashierDialog open={open} onClose={() => setOpen(false)} />
     </header>

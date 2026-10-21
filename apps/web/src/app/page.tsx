@@ -1,19 +1,26 @@
+"use client";
 import Link from "next/link";
 import { TileArt } from "@/components/TileArt";
 import { HeroWheel } from "@/components/HeroWheel";
-import { SESSION } from "@/lib/mock";
+import { GAMES } from "@/lib/games";
+import { useLobby, pct, type Lobby } from "@/lib/lobby";
 
-const GAMES = [
-  { id: "carrot", name: "Carrot in a Box", kind: "Player vs player", why: "Only the holder peeks. The box is sealed with a SHA-256 commitment before anyone bluffs.", stakes: "ⓩ 0.005 – 0.5", live: "6 tables", href: "/table/carrot", feature: true },
-  { id: "holdem", name: "Heads-up Hold'em", kind: "Player vs player", why: "Mental-poker shuffle: even the house can't see your hole cards.", stakes: "ⓩ 0.01 – 1", live: "4 tables", href: "/table/holdem" },
-  { id: "liars", name: "Liar's Dice", kind: "2–4 players", why: "Dice committed under the cup; opened only when someone calls liar.", stakes: "ⓩ 0.005 – 0.25", live: "3 tables", href: "/table/liars" },
-  { id: "roulette", name: "European Roulette", kind: "House · single zero", why: "Seed committed before you bet; every spin verifiable.", stakes: "ⓩ 0.001 – 0.5", live: "Live", href: "/table/roulette" },
-  { id: "blackjack", name: "Blackjack", kind: "House · 6 decks", why: "The whole shoe order is committed before the first card.", stakes: "ⓩ 0.005 – 0.5", live: "Live", href: "/table/blackjack" },
-  { id: "dice", name: "Dice", kind: "House · over / under", why: "HMAC(server seed, your seed, nonce). Check it yourself.", stakes: "ⓩ 0.001 – 0.25", live: "Live", href: "/table/dice" },
-  { id: "crash", name: "Crash", kind: "House · multiplayer", why: "Cash out before it busts. Bettors are just session hashes.", stakes: "ⓩ 0.001 – 0.25", live: "Round 18,204", href: "/table/crash", wide: true },
-];
 
-export default function Lobby() {
+/** Live activity for a tile, from the server. Shows nothing rather than a made-up number. */
+function liveLabel(id: string, d: Lobby | null): string | null {
+  if (!d) return null;
+  const t = d.tables;
+  const pvp = (r: { rooms: number; waiting: number }) => r.rooms ? `${r.rooms} table${r.rooms > 1 ? "s" : ""} live` : r.waiting ? `${r.waiting} waiting` : "Open · no one seated";
+  if (id === "carrot") return pvp(t.carrot);
+  if (id === "liars") return pvp(t.liars);
+  if (id === "holdem") return pvp(t.holdem);
+  if (id === "crash") return `Round ${t.crash.round.toLocaleString()}${t.crash.bettors ? ` · ${t.crash.bettors} in` : ""}`;
+  return "Dealing now";
+}
+
+export default function LobbyPage() {
+  const { data, offline } = useLobby();
+  const cov = data?.coverage ?? null;
   return (
     <div className="lobby">
       <section className="hero">
@@ -25,11 +32,15 @@ export default function Lobby() {
             <Link className="btn gold lg" href="/table/carrot">Take a seat</Link>
             <a className="btn ghost lg" href="#fair">How privacy works</a>
           </div>
-          <dl className="stats">
-            <div><dt>Transparent addresses used</dt><dd>0</dd></div>
-            <div><dt>Last fairness anchor</dt><dd>#{SESSION.anchor.toLocaleString()}</dd></div>
-            <div><dt>Reserves ≥ liabilities</dt><dd>112.4%</dd></div>
+          <dl className={`stats ${data ? "" : "loading"}`} aria-busy={!data}>
+            <div title="Transparent outputs the house wallets ever received or sent, counted from the wallet databases.">
+              <dt>Transparent outputs used</dt><dd>{data?.transparent ?? <span className="skel" />}</dd></div>
+            <div title={data?.anchor ? `SHA-256 over block ${data.anchor.block_hash.slice(0, 16)}… and ${data.anchor.count} live seed commitments: ${data.anchor.digest}` : undefined}>
+              <dt>Fairness anchor</dt><dd>{data?.anchor ? <a href="/solvency#anchor">#{data.anchor.height.toLocaleString()}</a> : <span className="skel" />}</dd></div>
+            <div title={data ? `Cold reserve ${((data.reserve_zat ?? 0) / 1e8).toFixed(4)} TAZ (public viewing key) vs ${(data.liabilities_zat / 1e8).toFixed(4)} TAZ owed to players. Hot wallet ${((data.hot_zat ?? 0) / 1e8).toFixed(4)} TAZ not counted.` : undefined}>
+              <dt>Reserve coverage</dt><dd className={cov !== null && cov < 1 ? "under" : ""}>{cov !== null ? <a href="/solvency">{pct(cov)}</a> : data ? "—" : <span className="skel" />}</dd></div>
           </dl>
+          {offline && <p className="stats-note">Game server unreachable: live figures will appear when it is back.</p>}
         </div>
         <div className="hero-art"><HeroWheel /></div>
       </section>
@@ -44,7 +55,7 @@ export default function Lobby() {
                 <span className="kind">{g.kind}</span>
                 <h3>{g.name}</h3>
                 <p>{g.why}</p>
-                <div className="tile-foot"><span>{g.stakes}</span><span className="live"><i />{g.live}</span></div>
+                <div className="tile-foot"><span>{g.stakes}</span>{liveLabel(g.id, data) ? <span className="live"><i />{liveLabel(g.id, data)}</span> : <span className="skel sm" />}</div>
               </div>
             </Link>
           ))}

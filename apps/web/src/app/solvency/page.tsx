@@ -9,6 +9,35 @@ const HTTP = (process.env.NEXT_PUBLIC_GAME_WS ?? "ws://127.0.0.1:3200/ws").repla
 const z = (n: number) => (n / ZAT).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-8)}`;
 
+type Anchor = { height: number; block_hash: string; digest: string; commitments: string[]; built_at: number };
+const hexb = (h: string) => Uint8Array.from(h.match(/../g) ?? [], b => parseInt(b, 16));
+async function anchorDigest(a: Anchor) {
+  const parts = [new TextEncoder().encode("zecasino:anchor:v1"), hexb(a.block_hash), ...a.commitments.map(hexb)];
+  const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let i = 0; for (const p of parts) { all.set(p, i); i += p.length; }
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", all)), x => x.toString(16).padStart(2, "0")).join("");
+}
+
+/** Fairness anchor: recompute the digest in this browser and look for this session's own seed commitment in it. */
+function AnchorCard() {
+  const [a, setA] = useState<Anchor | null>(null); const [ok, setOk] = useState<boolean | null>(null); const [mine, setMine] = useState<boolean | null>(null);
+  useEffect(() => { fetch(`${HTTP}/anchor`).then(r => r.json()).then(async (v: Anchor | null) => {
+    if (!v) return; setA(v); setOk(await anchorDigest(v) === v.digest);
+    const c = await getClient(); const com = c ? (await c.rpc({ t: "seat_get" }).catch(() => null))?.seat?.commitment : null;
+    setMine(com ? v.commitments.includes(com) : null);
+  }).catch(() => {}); }, []);
+  return (
+    <section id="anchor" className="fair sol-anchor">
+      <h4>Fairness anchor</h4>
+      <p>Every minute the server hashes the latest block hash together with every live seed commitment (yours included). The block hash proves the set existed no earlier than that block; your browser recomputes the digest from the published list below.</p>
+      {a ? <dl>
+        <dt>Block</dt><dd className="mono">#{a.height.toLocaleString()} · {short(a.block_hash)}</dd>
+        <dt>Digest</dt><dd className="mono">{short(a.digest)} {ok === null ? "" : ok ? <b className="ok">✓ recomputed</b> : <b className="bad">✗ mismatch</b>}</dd>
+        <dt>Commitments</dt><dd className="mono">{a.commitments.length} live{mine === null ? "" : mine ? " · yours is in it" : " · yours joins at the next anchor"}</dd>
+      </dl> : <p className="wait">Waiting for the first anchor<span className="dots" /></p>}
+    </section>
+  );
+}
+
 export default function Solvency() {
   const [s, setS] = useState<Sol | null>(null);
   const [down, setDown] = useState(false);
@@ -44,6 +73,7 @@ export default function Solvency() {
         <div className={`sol-card ${cover !== null && cover < 1 ? "short" : ""}`}><small>Coverage</small><b>{cover !== null ? `${(cover * 100).toFixed(cover < 0.01 ? 3 : 1)}%` : "n/a"}</b>
           <div className="sol-bar"><i style={{ width: `${Math.min(100, (cover ?? 0) * 100)}%` }} /></div></div>
       </div>
+      <AnchorCard />
       <div className="sol-cols">
         <section className="fair sol-tree">
           <h4>Liability tree</h4>

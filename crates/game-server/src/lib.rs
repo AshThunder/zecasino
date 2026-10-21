@@ -40,6 +40,8 @@ pub struct App {
     holdem_wait: Mutex<Vec<Waiting>>,
     pub(crate) holdems: Mutex<HashMap<String, holdem_room::Room>>,
     pub solvency: Mutex<Option<solvency::Snapshot>>,
+    /// Latest fairness anchor: SHA-256 over the chain tip's block hash and every live seed commitment.
+    pub anchor: Mutex<Option<Value>>,
     /// Hold'em stall limits in ms: betting action, and protocol steps (keys, shuffles, shares).
     pub hm_act_ms: std::sync::atomic::AtomicU64,
     /// Carrot / Liar's Dice: a stalled player is auto-played after this long without progress.
@@ -66,7 +68,7 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(ledger), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new(first_round)), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), anchor: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
@@ -100,10 +102,13 @@ impl App {
 
 pub fn router(app: Arc<App>) -> Router {
     tokio::spawn(pvp_sweeper(app.clone()));
+    tokio::spawn(anchor_loop(app.clone()));
     Router::new()
         .route("/ws", get(ws))
         .route("/health", get(|| async { "ok" }))
         .route("/solvency", get(solvency))
+        .route("/lobby", get(lobby))
+        .route("/anchor", get(|State(app): State<Arc<App>>| async move { Json(app.anchor.lock().await.clone().unwrap_or(Value::Null)) }))
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(app)
 }
@@ -120,6 +125,47 @@ impl App {
         }
         tokio::sync::MutexGuard::map(g, |s| s.as_mut().unwrap())
     }
+}
+
+/// Every 60 s: digest = SHA-256("zecasino:anchor:v1" ‖ tip block hash ‖ sorted live seed commitments ‖ crash commitment).
+/// Including the block hash proves the commitment set existed no earlier than that block; the full list is
+/// published at /anchor so anyone can recompute the digest and find their own commitment in it.
+async fn anchor_loop(app: Arc<App>) {
+    use sha2::{Digest, Sha256};
+    loop {
+        if let Some(z) = &app.zec { if let Ok(c) = z.chain().await {
+            let mut coms: Vec<String> = app.seats.lock().await.values().map(|p| p.commitment.clone()).collect();
+            coms.push(app.crash.lock().await.commitment.clone());
+            coms.sort(); coms.dedup();
+            let mut h = Sha256::new(); h.update(b"zecasino:anchor:v1"); h.update(hex::decode(c["hash"].as_str().unwrap_or("")).unwrap_or_default());
+            for x in &coms { h.update(hex::decode(x).unwrap_or_default()); }
+            *app.anchor.lock().await = Some(json!({ "height": c["tip"], "block_hash": c["hash"], "digest": hex::encode(h.finalize()), "commitments": coms, "built_at": cashier::now(),
+                "transparent_received": c["transparent_received"], "transparent_sent": c["transparent_sent"] }));
+        } }
+        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+    }
+}
+
+/// Lobby facts, all measured: reserve coverage, fairness anchor, transparent-output count, live table activity.
+async fn lobby(State(app): State<Arc<App>>) -> Json<Value> {
+    let liab = app.ledger.lock().await.liabilities();
+    let get = |f: Option<anyhow::Result<Value>>| f.and_then(|r| r.ok()).and_then(|r| r["total_zat"].as_u64());
+    let t = std::time::Duration::from_secs(4);
+    let (reserve, hot) = match &app.zec { Some(z) => (get(tokio::time::timeout(t, z.reserve()).await.ok()), get(tokio::time::timeout(t, z.status()).await.ok())), None => (None, None) };
+    // Coverage = cold reserve (checkable with its public viewing key) / liabilities, same as /solvency. Hot wallet reported separately.
+    let a = app.anchor.lock().await.clone();
+    let c = app.crash.lock().await; let crash_round = c.round; let crash_bettors = c.bets.len(); drop(c);
+    let tables = json!({
+        "carrot": { "rooms": app.carrots.lock().await.len(), "waiting": app.carrot_wait.lock().await.len() },
+        "liars": { "rooms": app.liars.lock().await.len(), "waiting": app.liars_wait.lock().await.len() },
+        "holdem": { "rooms": app.holdems.lock().await.len(), "waiting": app.holdem_wait.lock().await.len() },
+        "crash": { "round": crash_round, "bettors": crash_bettors },
+    });
+    Json(json!({ "liabilities_zat": liab, "reserve_zat": reserve, "hot_zat": hot,
+        "coverage": reserve.map(|r| if liab == 0 { Value::Null } else { json!(r as f64 / liab as f64) }),
+        "anchor": a.as_ref().map(|a| json!({ "height": a["height"], "digest": a["digest"], "block_hash": a["block_hash"], "count": a["commitments"].as_array().map(|x| x.len()) })),
+        "transparent": a.as_ref().map(|a| a["transparent_received"].as_u64().unwrap_or(0) + a["transparent_sent"].as_u64().unwrap_or(0)),
+        "online": app.conns.lock().await.len(), "tables": tables }))
 }
 
 async fn solvency(State(app): State<Arc<App>>) -> Json<Value> {

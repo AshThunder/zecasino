@@ -206,3 +206,15 @@ pub async fn import_view(db: &mut Db, client: &mut Client, ufvk: &str, birthday:
 }
 
 pub fn birthday(db: &Db) -> anyhow::Result<u32> { Ok(u32::from(db.get_account_birthday(account(db)?)?)) }
+
+/// Public chain facts read straight from the wallet DBs (read-only, no wallet lock): tip height + block hash
+/// (display byte order), and how many transparent outputs the wallet ever received or sent. Deposits and
+/// withdrawals are shielded-only, so these should stay 0; the lobby shows the measured number, not a claim.
+pub fn chain_facts(db_path: &Path) -> anyhow::Result<(u32, String, u64, u64)> {
+    let c = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let (h, mut hash): (u32, Vec<u8>) = c.query_row("SELECT height, hash FROM blocks ORDER BY height DESC LIMIT 1", [], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    hash.reverse();
+    let t_in: u64 = c.query_row("SELECT COUNT(*) FROM transparent_received_outputs", [], |r| r.get(0))?;
+    let t_out: u64 = c.query_row("SELECT COUNT(*) FROM sent_notes WHERE output_pool = 0", [], |r| r.get(0))?;
+    Ok((h, hex::encode(hash), t_in, t_out))
+}
