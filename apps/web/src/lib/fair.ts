@@ -23,16 +23,21 @@ export async function stream(seed: Uint8Array, clientSeed: string, nonce: number
   return { u8, u32, f64, below };
 }
 
+/** Crash points are capped at 1000.00x (hundredths), same as crates/fairness CRASH_MAX. */
+export const CRASH_MAX = 100_000;
+
+export function crashPoint(u: number) {
+  const h = BigInt(u);
+  if (h % 100n === 0n) return 100;
+  const e = 1n << 32n; const v = (100n * e - h) / (e - h);
+  return Number(v < 100n ? 100n : v > BigInt(CRASH_MAX) ? BigInt(CRASH_MAX) : v);
+}
+
 export const games = {
   /** 0..=10000, hundredths of a percent */
   dice: async (seed: Uint8Array, cs: string, n: number) => Math.floor((await stream(seed, cs, n, 1)).f64() * 10001),
   /** multiplier in hundredths, 1% instant bust */
-  crash: async (seed: Uint8Array, cs: string, n: number) => {
-    const h = BigInt((await stream(seed, cs, n, 1)).u32());
-    if (h % 100n === 0n) return 100;
-    const e = 1n << 32n; const v = (100n * e - h) / (e - h);
-    return Number(v < 100n ? 100n : v);
-  },
+  crash: async (seed: Uint8Array, cs: string, n: number) => crashPoint((await stream(seed, cs, n, 1)).u32()),
   roulette: async (seed: Uint8Array, cs: string, n: number) => (await stream(seed, cs, n, 1)).below(37),
   shoe: async (seed: Uint8Array, cs: string, n: number, decks = 6) => {
     const s = await stream(seed, cs, n, 160);

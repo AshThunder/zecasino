@@ -98,7 +98,7 @@ export default function Crash() {
       setElapsed(t); setMult(m);
       if (!remote) {
         setTable(ts => ts.map(s => !s.out && s.target <= m && s.target <= crash ? { ...s, out: s.target } : s));
-        setMine(me => { if (me && !me.out && auto > 1 && m >= auto && auto <= crash) { play("stack", 0.5); return { ...me, out: auto }; } return me; });
+        setMine(me => { if (me && !me.out && auto > 1 && m >= auto && auto < crash) { play("stack", 0.5); return { ...me, out: auto }; } return me; });
       }
       if (t >= end) {
         setMult(p.crash!); setBust(p.crash!); setPhase("busted"); play("collide", 0.7);
@@ -141,7 +141,7 @@ export default function Crash() {
   return (
     <div className="table-page crash-page">
       <div className="table-head">
-        <div><p className="eyebrow">House game · multiplayer · round {round.toLocaleString()}</p><h1>Crash</h1></div>
+        <div><p className="eyebrow">House game · multiplayer · max 1000× · round {round.toLocaleString()}</p><h1>Crash</h1></div>
         <div className="history" aria-label="Recent busts">{hist.map(h => <span key={h.nonce} className={`hpill dpill ${h.outcome >= 200 ? "win" : "lose"}`}>{(h.outcome / 100).toFixed(2)}×</span>)}</div>
       </div>
       <div className="felt crash-felt">
@@ -184,7 +184,7 @@ export default function Crash() {
           <div className="ctl">
             <button className="bet-spot" onClick={() => { if (!joined) { setStack(s => [...s, chip]); play("chip"); } }} disabled={joined} aria-label="Add chip to bet"><ChipStack values={stack} size={52} /></button>
             <div className="bet-total"><small>Bet</small><b>ⓩ {stake.toFixed(3)}</b></div>
-            <label className="auto"><small>Auto cash-out</small><span><input type="number" min={1.01} step={0.1} value={auto} onChange={e => setAuto(Number(e.target.value))} disabled={joined} />×</span></label>
+            <label className="auto"><small>Auto cash-out</small><span><input type="number" min={1.01} max={999.99} step={0.1} value={auto} onChange={e => setAuto(Number(e.target.value))} disabled={joined} />×</span></label>
             <button className="btn ghost" onClick={() => setStack([])} disabled={joined}>Clear</button>
             {phase === "running" && mine && !mine.out
               ? <button className="btn gold lg cash" onClick={cashOut}>Cash out ⓩ {(mine.bet * mult).toFixed(4)}</button>

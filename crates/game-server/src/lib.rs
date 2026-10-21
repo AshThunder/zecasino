@@ -243,6 +243,7 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
         }
         "crash_bet" => {
             let auto = v["auto"].as_u64().filter(|a| *a >= 101);
+            if auto.is_some_and(|a| a >= games::CRASH_MAX) { return Err("auto cash-out must be below the 1000x cap"); }
             let mut c = app.crash.lock().await;
             if c.phase != crash::Phase::Betting { return Err("betting closed"); }
             if c.bets.contains_key(tok) { return Err("already in this round"); }

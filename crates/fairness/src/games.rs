@@ -4,12 +4,17 @@ use crate::OutcomeStream;
 /// Dice roll 0.00..=100.00 (returned in hundredths).
 pub fn dice(s: &mut OutcomeStream) -> u32 { (s.next_f64() * 10_001.0) as u32 }
 
-/// Crash multiplier in hundredths (100 = 1.00x), 1% house edge.
-pub fn crash(s: &mut OutcomeStream) -> u64 {
-    let h = s.next_u32() as u64;
+/// Highest crash point, in hundredths: 1000.00x. Bounds the house's worst case per round.
+pub const CRASH_MAX: u64 = 100_000;
+
+/// Crash multiplier in hundredths (100 = 1.00x), 1% house edge, capped at CRASH_MAX.
+pub fn crash(s: &mut OutcomeStream) -> u64 { crash_point(s.next_u32()) }
+
+pub fn crash_point(h: u32) -> u64 {
+    let h = h as u64;
     if h % 100 == 0 { return 100; }
     let e = 1u64 << 32;
-    ((100 * e - h) / (e - h)).max(100)
+    ((100 * e - h) / (e - h)).clamp(100, CRASH_MAX)
 }
 
 /// European roulette pocket 0..=36.
@@ -32,6 +37,11 @@ mod tests {
         assert!(v.iter().all(|&x| x >= 100));
         let p2 = v.iter().filter(|&&x| x >= 200).count() as f64 / v.len() as f64;
         assert!((0.47..0.52).contains(&p2), "P(>=2x)={p2}");
+    }
+    #[test] fn crash_cap() {
+        assert_eq!(crash_point(u32::MAX), CRASH_MAX);
+        assert_eq!(crash_point(u32::MAX - 1), CRASH_MAX);
+        assert_eq!(crash_point(4_290_000_001), 85_601); // 856.01x: just under the cap, uncapped formula
     }
     #[test] fn roulette_covers_all() {
         let mut seen = [false; 37];

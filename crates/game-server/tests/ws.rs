@@ -20,6 +20,9 @@ async fn until(w: &mut Ws, t: &str) -> Value {
         if let Message::Text(s) = m { let v: Value = serde_json::from_str(&s).unwrap(); if v["t"] == t { return v; } if v["t"] == "error" { panic!("{v}"); } }
     }
 }
+async fn until_any(w: &mut Ws) -> Value {
+    loop { if let Message::Text(s) = w.next().await.unwrap().unwrap() { return serde_json::from_str(&s).unwrap(); } }
+}
 async fn client(url: &str, credit: u64) -> (Ws, Value) {
     let (mut w, _) = connect_async(url).await.unwrap();
     send(&mut w, json!({ "t": "hello", "client_seed": "test-seed" })).await;
@@ -121,6 +124,9 @@ async fn crash_round_settles_and_reveals() {
     send(&mut w, json!({ "t": "crash_sub" })).await;
     // wait for a betting phase
     loop { let s = until(&mut w, "crash").await; if s["phase"] == "betting" { break; } }
+    send(&mut w, json!({ "t": "crash_bet", "stake": 100_000, "auto": 100_000 })).await;
+    let e = loop { let m = until_any(&mut w).await; if m["t"] == "error" { break m; } };
+    assert!(e["error"].as_str().unwrap().contains("1000x"), "{e}");
     send(&mut w, json!({ "t": "crash_bet", "stake": 100_000, "auto": 101 })).await;
     let bet = until(&mut w, "crash_bet").await;
     let commitment = until(&mut w, "crash_start").await["commitment"].as_str().unwrap().to_owned();
