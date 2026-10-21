@@ -64,6 +64,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
     const r = await q.probe(A, { t: "liars_join", stake: q.ledger(A.token).balance + 1000 }); record("Liar's Dice", "bet > balance rejected", r.t === "error", r.error);
   }
   // ---------------- Hold'em
+  if (which === "all" || which === "holdem" || which === "hmrefresh") for (const s of [A, B]) await q.probe(s, { t: "dev_credit", amount: 60_000_000 });
   if (which === "all" || which === "holdem") {
    if (which !== "hmrefresh") {
     await sitBoth(A, B, "/table/holdem");
