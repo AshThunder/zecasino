@@ -1,0 +1,23 @@
+# Play-chip demo server: no zec-service, no secrets, separate DB.
+app = "zecasino-demo"
+primary_region = "jnb"
+[build]
+  dockerfile = "rust.Dockerfile"
+  [build.args]
+    BIN = "zecasino-game-server"
+[env]
+  ZECASINO_ADDR = "0.0.0.0:3200"
+  ZECASINO_DEMO = "1"
+  ZECASINO_DB = "/data/demo.sqlite"
+[mounts]
+  source = "demo_data"
+  destination = "/data"
+[http_service]
+  internal_port = 3200
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

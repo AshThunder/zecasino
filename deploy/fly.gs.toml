@@ -1,0 +1,28 @@
+# Real-money (testnet) game server. Public websocket; talks to zec-service over Fly private network.
+app = "zecasino-gs"
+primary_region = "jnb"
+[build]
+  dockerfile = "rust.Dockerfile"
+  [build.args]
+    BIN = "zecasino-game-server"
+[env]
+  ZECASINO_ADDR = "0.0.0.0:3200"
+  ZECASINO_DB = "/data/zc-real.sqlite"
+  ZEC_SERVICE_URL = "http://zecasino-zs.internal:3300"
+  # secret: ZEC_INTERNAL_KEY
+[mounts]
+  source = "gs_data"
+  destination = "/data"
+[http_service]
+  internal_port = 3200
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+  [[http_service.checks]]
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -1,0 +1,22 @@
+# Wallet service. NO [http_service]/[[services]]: not publicly reachable; only zecasino-zs.internal:3300 on 6PN.
+app = "zecasino-zs"
+primary_region = "jnb"
+[build]
+  dockerfile = "rust.Dockerfile"
+  [build.args]
+    BIN = "zecasino-zec-service"
+[processes]
+  app = "serve"
+[env]
+  ZEC_API = "[::]:3300"
+  ZEC_LWD = "https://testnet.zec.rocks:443"
+  ZEC_WALLET_DB = "/data/zec-wallet.sqlite"
+  ZEC_RESERVE_DB = "/data/reserve-view.sqlite"
+  ZEC_RESERVE_UFVK = "/data/reserve.ufvk"
+  # secrets: ZEC_SEED_WORDS (house mnemonic), ZEC_INTERNAL_KEY. Reserve mnemonic never leaves the box.
+[mounts]
+  source = "zs_data"
+  destination = "/data"
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
