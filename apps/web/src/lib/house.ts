@@ -29,8 +29,13 @@ export function useSeat(defaultClientSeed = "lagos-night-77") {
   const sync = () => { const s = ref.current; if (s) setView(v => ({ ...v, commitment: s.commitment, clientSeed: s.clientSeed, nonce: s.nonce })); };
   return {
     ...view, ready: view.commitment !== "…",
-    async bet<T>(game: Game, params: Record<string, unknown> = {}) { const r = await ref.current!.bet<T>(game, params); sync(); return r; },
-    async rotate(cs: string) { const r = await ref.current!.rotate(cs); sync(); return r; },
+    async bet<T>(game: Game, params: Record<string, unknown> = {}) {
+      const s = ref.current!; const commitment = s.commitment, clientSeed = s.clientSeed;
+      const r = await s.bet<T>(game, params); sync();
+      import("./history").then(h => h.record(game, summarize(game, r.outcome), [{ kind: "house", game, commitment, clientSeed, nonce: r.nonce, outcome: r.outcome }]));
+      return r;
+    },
+    async rotate(cs: string) { const r = await ref.current!.rotate(cs); sync(); import("./history").then(h => h.attachSeed(r.commitment, r.serverSeed)); return r; },
   };
 }
 
@@ -52,4 +57,11 @@ export async function verifyBet(r: Revealed, game: Game, nonce: number) {
   if (!(await verifySeed(r.serverSeed, r.commitment))) return null;
   const seed = unhex(r.serverSeed);
   return game === "blackjack" ? games.shoe(seed, r.clientSeed, nonce) : games[game](seed, r.clientSeed, nonce);
+}
+
+function summarize(game: Game, o: unknown) {
+  if (game === "dice") return `roll ${(Number(o) / 100).toFixed(2)}`;
+  if (game === "roulette") return `pocket ${String(o)}`;
+  if (game === "crash") return `point ${(Number(o) / 100).toFixed(2)}×`;
+  return "shoe dealt";
 }

@@ -728,3 +728,19 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
   .boxes { gap: 8px !important; max-width: 100%; }
   .boxes .cbox { width: 34vw !important; height: 32vw !important; }
 }
+/* session history */
+.history-page { padding: 40px 0 80px; max-width: 860px; }
+.history-page .h-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 26px; flex-wrap: wrap; }
+.history-page .lede { color: #CFE5D8bb; max-width: 60ch; }
+.h-list { display: grid; gap: 8px; }
+.h-item { position: relative; }
+.h-item .vround { padding-right: 34px; }
+.h-del { position: absolute; right: 8px; top: 10px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid #ffffff1f; background: transparent; color: #CFE5D899; cursor: pointer; }
+.h-del:hover { color: #fff; border-color: #E76F51; }
+.h-at { display: block; font-size: .7rem; color: #CFE5D877; margin-top: 2px; }
+.h-skel { height: 48px; border-radius: 12px; }
+.h-confirm { display: flex; gap: 8px; align-items: center; font-size: .85rem; flex-wrap: wrap; }
+.btn.danger { background: #E76F51; color: #0B0B0C; }
+.empty-state { text-align: center; padding: 60px 20px; border: 1px dashed #ffffff1a; border-radius: 18px; color: #CFE5D8aa; display: grid; justify-items: center; gap: 10px; }
+.empty-state h3 { font-family: var(--font-display); color: #F5F1E6; font-size: 1.5rem; margin: 6px 0 0; }
+.h-skel { display: block; width: auto; }

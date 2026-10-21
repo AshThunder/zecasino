@@ -13,7 +13,7 @@ import { GAMES } from "@/lib/games";
 import { installMotion } from "@/lib/motion";
 import { DepositShield } from "./DepositShield";
 import { DemoBar, ModeSwitch } from "./DemoBar";
-const NAV = [["Lobby", "/"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
+const NAV = [["Lobby", "/"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"], ["History", "/history"]] as const;
 const PVP = GAMES.filter(g => g.kind.startsWith("Player")), HOUSE = GAMES.filter(g => !PVP.includes(g));
 
 /** Games menu: all seven tables, grouped. Opens on click or keyboard, closes on Escape / outside click / navigation. */
@@ -57,7 +57,7 @@ function MobileMenu({ path }: { path: string }) {
       <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>Mode</small><div className="ms-wrap"><ModeSwitch /></div>
-      <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link>
+      <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link><Link href="/history" className={path === "/history" ? "on" : ""}>Session history</Link>
     </nav>, document.body)}
   </>);
 }

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChipRack } from "@/components/ChipRack";
 import { ChipStack } from "@/components/Chip";
 import { HouseFair } from "@/components/HouseFair";
+import { record } from "@/lib/history";
 import { VerifiedRound } from "@/components/Verified";
 import { ZMark } from "@/components/ZMark";
 import { useSeat } from "@/lib/house";
@@ -30,6 +31,8 @@ export default function Crash() {
   const [bust, setBust] = useState(0);
   const [joined, setJoined] = useState(false);
   const [mine, setMine] = useState<{ bet: number; out?: number } | null>(null);
+  const mineRef = useRef(mine); mineRef.current = mine;
+  const joinedRef = useRef(false); useEffect(() => { if (mine) joinedRef.current = true; }, [mine]);
   // Win moment only on the live transition "in the round → cashed out" (not when a refresh restores a cashed bet).
   const wasOpen = useRef(false);
   useEffect(() => {
@@ -74,6 +77,7 @@ export default function Crash() {
           if (point.current) point.current.crash = m.bust / 100;
           const ok = (await verifySeed(m.server_seed, m.commitment)) && (await games.crash(unhex(m.server_seed), m.client_seed, m.round)) === m.bust;
           setChecked(x => [{ round: m.round, bust: m.bust / 100, ok }, ...x].slice(0, 6));
+          if (joinedRef.current) { joinedRef.current = false; const me = mineRef.current; record("crash", `bust ${(m.bust / 100).toFixed(2)}×${me?.out ? ` · cashed ${me.out.toFixed(2)}×` : " · busted"}`, [{ kind: "crash", round: m.round, bust: m.bust, commitment: m.commitment, clientSeed: m.client_seed, serverSeed: m.server_seed }]); }
           setRecent(x => [{ round: m.round, bust: m.bust / 100, ok }, ...x.filter(y => y.round !== m.round)].slice(0, 20));
         }),
       ];

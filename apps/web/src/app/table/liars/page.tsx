@@ -11,6 +11,7 @@ import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
 import { getClient, toZat } from "@/lib/server";
 import { pvpCommit, unhex } from "@/lib/fair";
+import { record, toHex } from "@/lib/history";
 
 type P = { anon: string; name: string; dice: number[] | null; commitment: string; salt?: string; ok?: boolean; chip: number; me?: boolean };
 type Bid = { q: number; f: number; by: string };
@@ -105,6 +106,7 @@ export default function Liars() {
             return { ...p, dice: o.dice, salt: o.salt, ok: o.commitment === p.commitment && (await pvpCommit(unhex(o.salt), new Uint8Array(o.dice))) === o.commitment };
           }));
           const name = (a: string) => opened.find(p => p.anon === a)?.name ?? a;
+          record("liars", `${m.count} on the table · ${m.you_won ? "you won" : "you lost"}`, opened.filter(p => p.salt).map(p => ({ kind: "commit" as const, commitment: p.commitment, salt: p.salt!, valueHex: toHex(new Uint8Array(p.dice!)) })));
           reveal(opened, { count: m.count, winner: name(m.winner), youWon: m.you_won, caller: name(m.caller), bid: { q: m.bid.q, f: m.bid.f, by: "" } });
         }),
       ];

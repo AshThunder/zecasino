@@ -8,6 +8,7 @@ import { CarrotBox } from "@/components/CarrotBox";
 import { Carrot } from "@/components/Carrot";
 import { ChipStack, Chip } from "@/components/Chip";
 import { FairPanel } from "@/components/FairPanel";
+import { record, toHex } from "@/lib/history";
 import { VerifiedRound } from "@/components/Verified";
 import { getClient, toZat } from "@/lib/server";
 import { hex, pvpCommit, unhex } from "@/lib/fair";
@@ -57,6 +58,7 @@ export default function CarrotTable() {
   const openSeal = async (o: { commitment: string; value: string; salt: string }) => {
     const ok = (await pvpCommit(unhex(o.salt), new TextEncoder().encode(o.value))) === o.commitment;
     setSeal({ ...o, ok }); setInHolder(o.value === "carrot:holder");
+    record("carrot", `carrot in ${o.value.replace("carrot:", "")}'s box`, [{ kind: "commit", commitment: o.commitment, salt: o.salt, valueHex: toHex(new TextEncoder().encode(o.value)) }]);
   };
 
   // Remote room events
