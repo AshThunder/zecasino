@@ -41,7 +41,7 @@ export default function Solvency() {
       <div className="sol-grid">
         <div className="sol-card"><small>Owed to players</small><b>ⓩ {s ? z(liab) : "…"}</b><span>{s ? `${s.snapshot.leaves} funded sessions · root sum` : ""}</span></div>
         <div className="sol-card"><small>Cold reserve · on-chain verifiable</small><b>ⓩ {res ? z(res.total_zat) : s ? "n/a" : "…"}</b><span>{res ? `watched with the public viewing key · ${res.network} block ${res.tip?.toLocaleString()}` : "reserve wallet offline"}{s?.hot ? ` · hot wallet ⓩ ${z(s.hot.total_zat)} (server-reported)` : ""}</span></div>
-        <div className={`sol-card ${cover !== null && cover < 1 ? "short" : ""}`}><small>Coverage</small><b>{cover !== null ? `${(cover * 100).toFixed(1)}%` : "n/a"}</b>
+        <div className={`sol-card ${cover !== null && cover < 1 ? "short" : ""}`}><small>Coverage</small><b>{cover !== null ? `${(cover * 100).toFixed(cover < 0.01 ? 3 : 1)}%` : "n/a"}</b>
           <div className="sol-bar"><i style={{ width: `${Math.min(100, (cover ?? 0) * 100)}%` }} /></div></div>
       </div>
       <div className="sol-cols">

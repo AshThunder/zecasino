@@ -19,3 +19,11 @@ cd ../apps/web && NEXT_PUBLIC_GAME_WS=ws://127.0.0.1:3200/ws pnpm build && pnpm 
 Without the game server the web app falls back to in-browser seats that use the same fairness code (`apps/web/src/lib/fair.ts`, checked against Rust vectors by `node --experimental-strip-types apps/web/scripts/verify-vectors.mts`).
 
 Tests: `cargo test --workspace` (fairness, ledger, settlement, websocket end-to-end for Dice/Roulette/Blackjack/Crash/Carrot/Liar's Dice, address policy).
+
+## Cold reserve (viewing key published on /solvency)
+```sh
+cd run
+ZEC_MNEMONIC=reserve.mnemonic ../target/release/zecasino-zec-service new-seed      # 0600, gitignored; keep offline
+ZEC_RESERVE_MNEMONIC=reserve.mnemonic ../target/release/zecasino-zec-service reserve-init tip
+# writes reserve.ufvk + reserve.addr and a watch-only reserve-view.sqlite; `serve` never reads the reserve seed
+```
