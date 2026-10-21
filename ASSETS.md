@@ -17,3 +17,4 @@
 | Zcash ⓩ mark usage | brand reference | https://z.cash/brand | Zcash trademark guidelines; descriptive use, "not affiliated" note |
 
 Evaluated and not used: Kenney Playing Cards / Boardgame packs (CC0) — 64px sprites, too low-res for a premium table.
+| Liar's Dice table (cups, dice, bid card) | Original SVG/CSS, reuses Die & DiceCup components | MIT (this repo) |
