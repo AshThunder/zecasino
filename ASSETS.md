@@ -19,3 +19,4 @@
 Evaluated and not used: Kenney Playing Cards / Boardgame packs (CC0) — 64px sprites, too low-res for a premium table.
 | Liar's Dice table (cups, dice, bid card) | Original SVG/CSS, reuses Die & DiceCup components | MIT (this repo) |
 | Dice table (rail, slider, readout) | Original CSS, this repo | MIT (this repo) |
+| Crash table (SVG curve, ⓩ coin head, bettor list) | Original SVG/CSS, reuses ZMark | MIT (this repo) |

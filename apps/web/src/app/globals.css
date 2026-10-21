@@ -398,3 +398,32 @@ html:has(.cashier[open]) { overflow: hidden; }
 .hpill.win { background: #0F6B3E; } .hpill.lose { background: #3a1216; }
 .bet-spot { width: 76px; height: 76px; border-radius: 50%; border: 2px dashed #F3ECDD44; background: #0003; display: grid; place-items: center; padding: 0; }
 .bet-spot:hover:not(:disabled) { border-color: var(--gold); }
+
+/* crash */
+.crash-felt { padding: 30px; }
+.crash-grid { display: grid; grid-template-columns: 1fr 250px; gap: 18px; align-items: stretch; }
+.crash-graph { position: relative; background: #00000040; border: 1px solid #ffffff14; border-radius: 16px; overflow: hidden; }
+.crash-graph svg { display: block; width: 100%; height: auto; }
+.crash-graph .ax { fill: #CFE5D877; font-family: var(--font-mono); font-size: 11px; }
+.crash-graph .coin { filter: drop-shadow(0 0 10px #F4B728aa); }
+.crash-graph .coin.bust { filter: grayscale(.6) drop-shadow(0 0 12px #E0414B); }
+.crash-readout { position: absolute; inset: 0; display: grid; place-content: start center; padding-top: 48px; text-align: center; pointer-events: none; }
+.crash-readout b { font-family: var(--font-display); font-size: 5.4rem; line-height: 1; font-weight: 700; color: var(--ivory); text-shadow: 0 6px 30px #000a; font-variant-numeric: tabular-nums lining-nums; }
+.crash-readout b.bust { color: #FF6B73; }
+.crash-readout small, .crash-readout span { letter-spacing: .24em; text-transform: uppercase; font-size: .72rem; color: #CFE5D8bb; margin-top: 8px; }
+.crash-players { max-height: 100%; display: flex; flex-direction: column; background: #00000038; border: 1px solid #ffffff14; border-radius: 16px; padding: 14px; overflow: hidden; }
+.crash-players h5 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+.crash-players .sub { margin: 4px 0 10px; font-size: .72rem; color: #CFE5D899; line-height: 1.4; }
+.crash-players ul { align-content: start; overflow: auto; flex: 1; min-height: 0; list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.crash-players li { display: grid; grid-template-columns: 1fr auto 46px; gap: 6px; font-size: .7rem; white-space: nowrap; padding: 6px 8px; border-radius: 8px; background: #ffffff06; }
+.crash-players li.me { background: #F4B72818; border: 1px solid #F4B72855; }
+.crash-players li b { text-align: right; font-family: var(--font-mono); font-weight: 500; color: #CFE5D899; }
+.crash-players li b.won { color: #7CF0AE; } .crash-players li b.lost { color: #FF8A8A; }
+.auto { display: grid; gap: 2px; }
+.auto small { font-size: .66rem; letter-spacing: .14em; text-transform: uppercase; color: #CFE5D8aa; }
+.auto span { display: flex; align-items: center; gap: 4px; font-family: var(--font-mono); }
+.auto input { width: 72px; background: #0B0B0C; border: 1px solid var(--line); border-radius: 8px; color: var(--gold-hi); padding: 6px 8px; font: inherit; }
+.btn.cash { min-width: 230px; animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { to { box-shadow: 0 0 0 6px #F4B72833, 0 6px 20px -8px #F4B72899; } }
+@media (max-width: 900px) { .crash-grid { grid-template-columns: 1fr; } }
+.crash-grid > .crash-players { height: 0; min-height: 100%; }
