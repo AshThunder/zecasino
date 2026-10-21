@@ -8,7 +8,7 @@ export type Lobby = {
   transparent: number | null; online: number;
   tables: { carrot: Room; liars: Room; holdem: Room; crash: { round: number; bettors: number } };
 };
-type Room = { rooms: number; waiting: number };
+type Room = { rooms: number; waiting: number; by_stake?: Record<string, number> };
 
 export const HTTP_BASE = (process.env.NEXT_PUBLIC_GAME_WS ?? "ws://127.0.0.1:3200/ws").replace(/^ws/, "http").replace(/\/ws$/, "");
 

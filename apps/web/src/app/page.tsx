@@ -7,6 +7,7 @@ import { DEMO, setMode } from "@/lib/server";
 import { GAMES } from "@/lib/games";
 import { Walkthrough } from "@/components/Walkthrough";
 import { RestoreDialog } from "@/components/Recovery";
+import { QuickMatch } from "@/components/Pvp";
 import { useLobby, pct, type Lobby } from "@/lib/lobby";
 
 
@@ -56,6 +57,8 @@ export default function LobbyPage() {
         {tour && <Walkthrough onClose={() => setTour(false)} />}
         {restore && <RestoreDialog onClose={() => setRestore(false)} />}
       </section>
+
+      <QuickMatch data={data} />
 
       <section className="games" aria-labelledby="games-h">
         <div className="sec-head"><h2 id="games-h">The floor</h2><p>Every game here has a reason to be private.</p></div>

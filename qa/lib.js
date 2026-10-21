@@ -69,4 +69,4 @@ async function verifyHouse(p) {
   return { ok, bad };
 }
 function record(game, check, pass, note = "") { results.push({ game, check, pass, note }); console.log(`${pass ? "PASS" : "FAIL"} [${game}] ${check} ${note}`); }
-module.exports = { toQa, QA_WS, DB, probeSeq, launch, session, header, ledger, reconcile, probe, verifyHouse, record, results, BASE };
+module.exports = { toQa, QA_WS, QA_HTTP, DB, probeSeq, launch, session, header, ledger, reconcile, probe, verifyHouse, record, results, BASE };

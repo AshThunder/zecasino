@@ -125,6 +125,9 @@ impl App {
             if r.progress != seen.0 { seen = (r.progress, std::time::Instant::now()); continue; }
             let Some((who, limit)) = self.hm_waiting(r) else { continue };
             if who.is_empty() || seen.1.elapsed() < Duration::from_millis(limit) { continue; }
+            // A dropped player keeps their seat for the reconnect grace period.
+            let grace = self.grace_ms.load(Ordering::Relaxed) as u128;
+            if self.away.lock().await.get(&r.players[who[0]].token).is_some_and(|t| t.elapsed().as_millis() < grace) { continue; }
             let h = r.hand.as_mut().unwrap();
             let stalled = who[0];
             let name = r.players[stalled].anon.clone();

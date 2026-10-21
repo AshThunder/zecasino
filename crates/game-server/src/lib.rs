@@ -34,6 +34,7 @@ pub struct Waiting { pub player: Player, pub stake: u64, pub code: Option<String
 pub struct Rematch { pub game: &'static str, pub players: Vec<Player>, pub stake: u64, pub at: std::time::Instant, pub want: Vec<String> }
 /// How long a dropped player's seat is held before their turn may be auto-played.
 pub const GRACE_MS: u64 = 30_000;
+fn now_ms() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0) }
 fn invite_code() -> String { const A: &[u8] = b"23456789ABCDEFGHJKMNPQRSTVWXYZ"; let mut b = [0u8; 6]; rand::rngs::OsRng.fill_bytes(&mut b); b.iter().map(|x| A[*x as usize % A.len()] as char).collect() }
 
 pub struct App {
@@ -155,7 +156,7 @@ impl App {
         let hc = house_guesses.then(|| { let swap = rand::rngs::OsRng.next_u32() & 1 == 1; let (c, o) = zecasino_fairness::commit::commit(if swap { b"carrot:house-swap" } else { b"carrot:house-keep" }); (swap, o, c.0) });
         for (p, role) in [(&g.holder, "holder"), (&g.guesser, "guesser")] {
             let opp = if role == "holder" { &g.guesser } else { &g.holder };
-            let mut m = json!({ "t": "carrot_start", "room": room, "role": role, "you": p.anon, "opponent": opp.anon, "opponent_house": house_bot::is_house(&opp.token), "stake": stake, "commitment": g.c.0, "turn_ms": self.turn_ms() });
+            let mut m = json!({ "t": "carrot_start", "room": room, "role": role, "you": p.anon, "opponent": opp.anon, "opponent_house": house_bot::is_house(&opp.token), "stake": stake, "commitment": g.c.0, "turn_ms": self.turn_ms(), "at": now_ms() });
             if role == "holder" { m["peek"] = json!(if g.in_holder { "carrot" } else { "empty" }); }
             if let Some((_, _, c)) = &hc { m["house_commitment"] = json!(c); }
             m["balance"] = json!(self.ledger.lock().await.balance(&p.token).ok());
@@ -181,7 +182,7 @@ impl App {
             let bal = self.ledger.lock().await.balance(&p.token).ok();
             let opp = &g.players[1 - i];
             self.log_reset(&p.token).await;
-            self.log_to(&p.token, json!({ "t": "liars_start", "room": room, "seat": i, "you": p.anon, "opponent": opp.anon, "opponent_house": house_bot::is_house(&opp.token), "dice": g.dice[i], "salt": g.commits[i].1.salt, "commitments": commits, "turn": g.turn, "stake": stake, "balance": bal, "turn_ms": self.turn_ms() })).await;
+            self.log_to(&p.token, json!({ "t": "liars_start", "room": room, "seat": i, "you": p.anon, "opponent": opp.anon, "opponent_house": house_bot::is_house(&opp.token), "dice": g.dice[i], "salt": g.commits[i].1.salt, "commitments": commits, "turn": g.turn, "stake": stake, "balance": bal, "turn_ms": self.turn_ms(), "at": now_ms() })).await;
         }
         self.touch(&room).await;
         self.liars.lock().await.insert(room.clone(), g);
@@ -599,7 +600,7 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let line = LINES.get(v["line"].as_u64().unwrap_or(99) as usize).ok_or("unknown line")?;
             let rooms = app.carrots.lock().await; let g = rooms.get(v["room"].as_str().unwrap_or("")).ok_or("no room")?;
             if g.holder.token != tok { return Err("only the holder talks"); }
-            app.log_to(&g.guesser.token, json!({ "t": "carrot_say", "line": line, "turn_ms": app.turn_ms() })).await;
+            app.log_to(&g.guesser.token, json!({ "t": "carrot_say", "line": line, "turn_ms": app.turn_ms(), "at": now_ms() })).await;
             app.touch(v["room"].as_str().unwrap_or("")).await;
             return Ok(None);
         }
@@ -632,7 +633,7 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             if t == "liars_bid" {
                 let (q, f) = (v["q"].as_u64().unwrap_or(0) as u8, v["f"].as_u64().unwrap_or(0) as u8);
                 g.bid(who, q, f).map_err(|e| match e { pvp::BidError::NotYourTurn => "not your turn", pvp::BidError::NotHigher => "bid must be higher", _ => "invalid bid" })?;
-                let m = json!({ "t": "liars_bid", "room": room, "by": g.players[who].anon, "q": q, "f": f, "turn": g.turn, "turn_ms": app.turn_ms() });
+                let m = json!({ "t": "liars_bid", "room": room, "by": g.players[who].anon, "q": q, "f": f, "turn": g.turn, "turn_ms": app.turn_ms(), "at": now_ms() });
                 for p in g.players.clone() { app.log_to(&p.token, m.clone()).await; }
                 drop(rooms);
                 app.touch(&room).await;

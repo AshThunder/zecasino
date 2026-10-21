@@ -1,6 +1,8 @@
 "use client";
 import { useErrToast } from "@/lib/useErrToast";
 import { WaitingScene } from "@/components/WaitingScene";
+import { MatchBar, HouseBadge, HouseNote, TurnClock, PresenceBanner, RematchButton } from "@/components/Pvp";
+import { useMatch, usePresence } from "@/lib/pvp";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +20,7 @@ import { loadMp, mp, type Masked, type Pk, type Share } from "@/lib/mp";
 
 type Msg = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 type StepState = "wait" | "on" | "done" | "bad";
-const BUY_IN = 0.4;
+const BUY_INS = [0.2, 0.3, 0.4, 0.5];
 const z = (zat: number) => (zat / ZAT).toFixed(3);
 const short = (h: string) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "…");
 
@@ -28,7 +30,9 @@ export default function Holdem() {
   const [room, setRoom] = useState<string | null>(null);
   const [seat, setSeat] = useState(0);
   const [opp, setOpp] = useState("");
-  const [searching, setSearching] = useState(false);
+  const [stake, setStake] = useState(0.4);
+  const [oppHouse, setOppHouse] = useState(false);
+  const [lastRoom, setLastRoom] = useState<string | null>(null);
   const [handNo, setHandNo] = useState(0);
   const [button, setButton] = useState(0);
   const [steps, setSteps] = useState<StepState[]>(["wait", "wait", "wait"]);
@@ -42,6 +46,9 @@ export default function Holdem() {
   const [checks, setChecks] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   useErrToast(err);
+  const mm = useMatch("holdem", stake, setStake, setErr);
+  const searching = mm.searching;
+  const away = usePresence(room);
   const [notice, setNotice] = useState<string | null>(null);
   const [deadline, setDeadline] = useState(0);
   const [, tick] = useState(0);
@@ -67,7 +74,7 @@ export default function Holdem() {
       if (!alive) return; setOnline(!!c); if (!c) return;
       const ix = (m: Msg) => (m.by === "house" ? 0 : m.by === c.session?.anonHoldem ? -1 : 1);
       const on = (t: string, f: (m: Msg) => void) => offs.push(c.on(t, f));
-      on("hm_seated", m => { setSearching(false); setNotice(null); setRoom(m.room); setSeat(m.seat); seatRef.current = m.seat; setOpp(m.opponent); });
+      on("hm_seated", m => { setNotice(null); setLastRoom(null); setOppHouse(!!m.opponent_house); if (m.stacks?.[0]) setStake(m.stacks[0] / ZAT); setRoom(m.room); setSeat(m.seat); seatRef.current = m.seat; setOpp(m.opponent); });
       on("hm_hand", m => {
         const saved = JSON.parse(sessionStorage.getItem("zc.hm.sk") ?? "null");
         k.current.sk = saved && saved.room === m.room && saved.hand === m.hand ? saved.sk : ""; handRef.current = m.hand; setHandNo(m.hand); setButton(m.button); setHole([]); setOppHole(null); setBoard([]); setResult(null); setSt(null); setSteps(["wait", "wait", "wait"]); setChecks([]); });
@@ -133,7 +140,7 @@ export default function Holdem() {
         const won = m.winner === seatRef.current;
         if (won) celebrate((m.pot - m.rake) / ZAT, document.querySelector(".poker-felt"), { label: m.by === "showdown" ? "You take the pot" : "Pot is yours" }); else play(m.winner === "split" ? "chip" : "collide", 0.6);
       });
-      on("hm_closed", m => { setNotice(m.reason ? `Table closed: ${m.reason}. ⓩ ${z(m.cashed_out)} returned to your balance.` : null); setRoom(null); setSt(null); setHole([]); setBoard([]); setResult(null); });
+      on("hm_closed", m => { setLastRoom(m.room); setNotice(m.reason ? `Table closed: ${m.reason}. ⓩ ${z(m.cashed_out)} returned to your balance.` : null); setRoom(null); setSt(null); setHole([]); setBoard([]); setResult(null); });
       on("error", m => setErr(m.error));
       on("reconnected", () => { getClient().then(n => n?.rpc({ t: "pvp_resume" }).catch(() => {})); });
       c.rpc({ t: "pvp_resume" }).catch(() => {});
@@ -141,10 +148,6 @@ export default function Holdem() {
     return () => { alive = false; offs.forEach(f => f()); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sit = async () => {
-    const c = await getClient(); if (!c) return;
-    try { setErr(null); setSearching(true); await c.rpc({ t: "holdem_join", stake: toZat(BUY_IN) }); } catch (e) { setSearching(false); setErr((e as Error).message); }
-  };
   const act = async (action: "fold" | "check" | "call" | "raise") => {
     const c = await getClient(); setErr(null);
     c?.send({ t: "hm_act", room, action, to: action === "raise" ? raiseTo : undefined });
@@ -154,22 +157,25 @@ export default function Holdem() {
   const leave = async () => { const c = await getClient(); c?.send({ t: "holdem_leave", room }); };
 
   const legal = st?.legal; const me = seat, op = 1 - seat;
-  const stacks = (result?.stacks ?? st?.stacks ?? [toZat(BUY_IN), toZat(BUY_IN)]) as number[];
+  const stacks = (result?.stacks ?? st?.stacks ?? [toZat(stake), toZat(stake)]) as number[];
   const handName = hole.length === 2 && board.length >= 3 ? best([...hole, ...board]).name : hole.length === 2 && hole[0] % 13 === hole[1] % 13 ? "Pocket pair" : "";
-  const shuffleNames = ["House", seat === 0 ? "You" : `anon · ${opp}`, seat === 1 ? "You" : `anon · ${opp}`];
-  const resultText = result ? (result.winner === "split" ? "Split pot" : result.winner === me ? `You win ⓩ ${((result.pot - result.rake) / ZAT).toFixed(4)}${result.by === "showdown" ? ` with ${String(result.hands[me]).toLowerCase()}` : result.by === "forfeit" ? " · opponent withheld card shares" : ""}` : `anon · ${opp} wins${result.by === "showdown" ? ` with ${String(result.hands[op]).toLowerCase()}` : result.by === "forfeit" ? " · you forfeited by not sending card shares" : ""}`) : null;
+  const oppName = oppHouse ? "House player" : `anon · ${opp}`;
+  const shuffleNames = ["House (dealer key)", seat === 0 ? "You" : oppName, seat === 1 ? "You" : oppName];
+  const resultText = result ? (result.winner === "split" ? "Split pot" : result.winner === me ? `You win ⓩ ${((result.pot - result.rake) / ZAT).toFixed(4)}${result.by === "showdown" ? ` with ${String(result.hands[me]).toLowerCase()}` : result.by === "forfeit" ? " · opponent withheld card shares" : ""}` : `${oppName} wins${result.by === "showdown" ? ` with ${String(result.hands[op]).toLowerCase()}` : result.by === "forfeit" ? " · you forfeited by not sending card shares" : ""}`) : null;
   const left = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0;
+  const clock = deadline && st?.act_ms ? { left, frac: Math.max(0, Math.min(1, (deadline - Date.now()) / st.act_ms)) } : null;
 
   return (
     <div ref={scope} className="table-page holdem-page">
       <div className="table-head"><div><p className="eyebrow">Player vs player · heads-up no-limit · mental-poker shuffle</p><div className="th-title"><h1>Heads-up Hold&apos;em</h1><HowTo game="holdem" /></div></div>
-        <div className="blinds"><span>Blinds ⓩ 0.005 / 0.01</span><span>{handNo ? `Hand #${handNo}` : `Buy-in ⓩ ${BUY_IN.toFixed(2)}`}</span></div></div>
+        <div className="blinds"><span>Blinds ⓩ 0.005 / 0.01</span><span>{handNo ? `Hand #${handNo}` : `Buy-in ⓩ ${stake.toFixed(2)}`}</span></div></div>
       <div className="poker-wrap">
         <div className="poker-rail">
           <div className="poker-felt">
-        {searching && <WaitingScene table="holdem" label="Waiting for an opponent" />}
+        {searching && <WaitingScene table="holdem" label="Waiting for an opponent" m={mm} stake={stake} fmt={v => v.toFixed(2)} />}
+        <PresenceBanner away={away} />
             <div className="pk-seat top">
-              <Chip value={0.05} size={44} id="pk-op" /><div><b>{room ? `anon · ${opp}` : searching ? "Finding a player…" : "Empty seat"}</b><small>{room ? `ⓩ ${z(stacks[op])}${button === op ? " · dealer" : ""}${st?.street_bet?.[op] ? ` · bet ${z(st.street_bet[op])}` : ""}` : "Unlinkable session"}</small></div>
+              <Chip value={0.05} size={44} id="pk-op" /><div><b>{room ? (oppHouse ? <>House player <HouseBadge /></> : `anon · ${opp}`) : searching ? "Finding a player…" : "Empty seat"}</b><small>{room ? `ⓩ ${z(stacks[op])}${button === op ? " · dealer" : ""}${st?.street_bet?.[op] ? ` · bet ${z(st.street_bet[op])}` : ""}` : "Unlinkable session"}</small></div>
               <div className="pk-hole">{room && (oppHole ?? [-1, -1]).map((c, i) => <PlayingCard key={i} code={c >= 0 ? code(c) : "AS"} faceUp={c >= 0} width={70} />)}</div>
             </div>
             <div className="board">
@@ -189,9 +195,10 @@ export default function Holdem() {
         </div>
         <div className="pk-actions">
           {online === false && <span className="wait">Hold&apos;em is played between real players and needs the live game server.</span>}
-          {online && !room && <button className="btn gold lg" onClick={sit} disabled={searching}>{searching ? "Finding a player…" : `Sit down · buy in ⓩ ${BUY_IN.toFixed(2)}`}</button>}
+          {online && !room && lastRoom && <RematchButton room={lastRoom} house={oppHouse} />}
+          {online && !room && <MatchBar game="holdem" stakes={BUY_INS} stake={stake} setStake={setStake} m={mm} fmt={v => v.toFixed(2)} quickLabel="Quick seat · buy in" />}
           {room && legal && <>
-            <span className={`act-clock ${left <= 5 ? "low" : ""}`} title="Auto check, or fold if there is a bet, when the clock runs out">{left}s</span>
+            <TurnClock clock={clock} mine auto={legal.check ? "auto check" : "auto fold"} />
             {legal.fold && <button className="btn ghost" onClick={() => act("fold")}>Fold</button>}
             {legal.check ? <button className="btn ghost" onClick={() => act("check")}>Check</button> : <button className="btn ghost" onClick={() => act("call")}>Call ⓩ {z(legal.call)}</button>}
             {legal.raise && <><label className="raise"><span>{legal.check ? "Bet" : "Raise to"}</span><input type="range" min={legal.raise.min} max={legal.raise.max} step={toZat(0.005)} value={raiseTo} onChange={e => setRaiseTo(+e.target.value)} /><b>ⓩ {z(raiseTo)}</b>
@@ -202,11 +209,13 @@ export default function Holdem() {
                 return <button key={l} type="button" className={`btn ghost sm ${raiseTo === to ? "on" : ""}`} onClick={() => setRaiseTo(to)}>{l}</button>; })}</span></label>
               <button className="btn gold" onClick={() => act("raise")}>{raiseTo === legal.raise.max ? "All in" : legal.check ? "Bet" : "Raise"}</button></>}
           </>}
-          {room && !legal && !result && <span className="wait">{steps.some(s => s !== "done") ? "Shuffling the deck…" : hole.length ? `anon · ${opp} to act… ${st?.to_act === op && left ? `${left}s` : ""}` : "Dealing…"}</span>}
+          {room && !legal && !result && <span className="wait">{steps.some(s => s !== "done") ? "Shuffling the deck…" : hole.length ? `${oppName} to act…` : "Dealing…"}</span>}
+          {room && !legal && !result && st?.to_act === op && hole.length > 0 && <TurnClock clock={clock} mine={false} auto="they check or fold" />}
           {room && result && <><span className="wait">Next hand in a few seconds…</span><button className="btn ghost" onClick={leave}>Leave table</button></>}
         </div>
       </div>
       <div className="side-col">
+        {oppHouse && <HouseNote game="holdem" />}
         <aside className="fair mp">
         <h4>Mental-poker shuffle</h4>
         <p className="fair-explain">Every card is locked with three keys (yours, your opponent&apos;s and the house&apos;s), so nobody can see or stack the deck alone.</p>

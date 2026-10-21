@@ -2,7 +2,7 @@ const q = require("./lib"); const record = q.record;
 const which = process.argv[2] || "all";
 const vis = async (p, name) => { const l = p.getByRole("button", { name }); return (await l.count()) > 0 && await l.first().isVisible() && await l.first().isEnabled(); };
 async function until(fn, ms = 30000) { const t = Date.now(); while (Date.now() - t < ms) { const v = await fn(); if (v) return v; await new Promise(r => setTimeout(r, 300)); } return null; }
-async function sitBoth(A, B, path, btn = /Sit down/) {
+async function sitBoth(A, B, path, btn = /^Quick (match|seat)/) {
   for (const s of [A, B]) { await s.p.goto(q.BASE + path, { waitUntil: "networkidle" }); await s.p.waitForTimeout(1200); }
   await A.p.getByRole("button", { name: btn }).click(); await A.p.waitForTimeout(500);
   await B.p.getByRole("button", { name: btn }).click();
@@ -29,7 +29,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
       if (mode === "disconnect") { await guesser.p.evaluate(() => window.__zc.drop()); await guesser.p.waitForTimeout(3000); }
       const swap = await until(() => vis(guesser.p, "Swap boxes"), 20000);
       if (swap) await guesser.p.getByRole("button", { name: "Swap boxes" }).click();
-      const done = await until(async () => (await vis(A.p, "Next round")) && (await vis(B.p, "Next round")), 25000);
+      const done = await until(async () => (await vis(A.p, "New opponent")) && (await vis(B.p, "New opponent")), 25000);
       if (mode === "disconnect") record("Carrot", "guesser disconnect mid-round, reconnects and finishes", !!done);
       if (mode === "normal") record("Carrot", "round plays to reveal (two sessions)", !!done, done ? "" : `swap=${!!swap}`);
       if (!done) { await A.p.screenshot({ path: "/tmp/carrotA.png" }); await B.p.screenshot({ path: "/tmp/carrotB.png" }); }
@@ -89,7 +89,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
     record("Hold'em", "two hands played heads-up (two sessions), incl. a dropped connection mid-hand", hands >= 2, `${actions} actions`);
     await until(() => vis(A.p, "Leave table"), 10000);
     await A.p.getByRole("button", { name: "Leave table" }).click().catch(() => {});
-    await until(async () => (await vis(A.p, /Sit down/)) && (await vis(B.p, /Sit down/)), 15000);
+    await until(async () => (await vis(A.p, /^Quick (match|seat)/)) && (await vis(B.p, /^Quick (match|seat)/)), 15000);
     record("Hold'em", "ledger reconcile A after leaving", await q.reconcile(A, "holdem A"));
     record("Hold'em", "ledger reconcile B after leaving", await q.reconcile(B, "holdem B"));
     const r = await q.probe(A, { t: "holdem_join", stake: q.ledger(A.token).balance + 1000 }); record("Hold'em", "buy-in > balance rejected", r.t === "error", r.error);
@@ -100,7 +100,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
     await sitBoth(A, B, "/table/holdem");
     await until(() => vis(A.p, /^(Check|Call)/).then(a => a || vis(B.p, /^(Check|Call)/)), 30000);
     await A.p.reload({ waitUntil: "networkidle" }); await A.p.waitForTimeout(3000);
-    let refreshed = await until(async () => (await A.p.locator(".pk-seat.bottom .pcard").count()) > 0 && !(await vis(A.p, /Sit down/)), 8000);
+    let refreshed = await until(async () => (await A.p.locator(".pk-seat.bottom .pcard").count()) > 0 && !(await vis(A.p, /^Quick (match|seat)/)), 8000);
     record("Hold'em", "refresh mid-hand resumes the table", !!refreshed);
     let fin = null; const t1 = Date.now();
     while (!fin && Date.now() - t1 < 90000) {
@@ -110,7 +110,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
     }
     record("Hold'em", "refreshed player finishes the hand (own hole cards reopened)", !!fin && (await A.p.locator(".pk-seat.bottom .pcard").count()) >= 2);
     await until(() => vis(A.p, "Leave table"), 10000); await A.p.getByRole("button", { name: "Leave table" }).click().catch(() => {});
-    await until(async () => (await vis(A.p, /Sit down/)) && (await vis(B.p, /Sit down/)), 15000);
+    await until(async () => (await vis(A.p, /^Quick (match|seat)/)) && (await vis(B.p, /^Quick (match|seat)/)), 15000);
     record("Hold'em", "ledger reconcile A after refresh hand", await q.reconcile(A, "holdem A2"));
     record("Hold'em", "ledger reconcile B after refresh hand", await q.reconcile(B, "holdem B2"));
   }
