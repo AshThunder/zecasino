@@ -5,12 +5,12 @@ import { SESSION } from "@/lib/mock";
 
 const GAMES = [
   { id: "carrot", name: "Carrot in a Box", kind: "Player vs player", why: "Only the holder peeks. The box is sealed with a SHA-256 commitment before anyone bluffs.", stakes: "ⓩ 0.005 – 0.5", live: "6 tables", href: "/table/carrot", feature: true },
-  { id: "holdem", name: "Heads-up Hold'em", kind: "Player vs player", why: "Mental-poker shuffle: even the house can't see your hole cards.", stakes: "ⓩ 0.01 – 1", live: "4 tables", href: "#" },
-  { id: "liars", name: "Liar's Dice", kind: "2–4 players", why: "Dice committed under the cup; opened only when someone calls liar.", stakes: "ⓩ 0.005 – 0.25", live: "3 tables", href: "#" },
+  { id: "holdem", name: "Heads-up Hold'em", kind: "Player vs player", why: "Mental-poker shuffle: even the house can't see your hole cards.", stakes: "ⓩ 0.01 – 1", live: "4 tables", href: "/table/holdem" },
+  { id: "liars", name: "Liar's Dice", kind: "2–4 players", why: "Dice committed under the cup; opened only when someone calls liar.", stakes: "ⓩ 0.005 – 0.25", live: "3 tables", href: "/table/liars" },
   { id: "roulette", name: "European Roulette", kind: "House · single zero", why: "Seed committed before you bet; every spin verifiable.", stakes: "ⓩ 0.001 – 0.5", live: "Live", href: "/table/roulette" },
-  { id: "blackjack", name: "Blackjack", kind: "House · 6 decks", why: "The whole shoe order is committed before the first card.", stakes: "ⓩ 0.005 – 0.5", live: "Live", href: "#" },
-  { id: "dice", name: "Dice", kind: "House · over / under", why: "HMAC(server seed, your seed, nonce). Check it yourself.", stakes: "ⓩ 0.001 – 0.25", live: "Live", href: "#" },
-  { id: "crash", name: "Crash", kind: "House · multiplayer", why: "Cash out before it busts. Bettors are just session hashes.", stakes: "ⓩ 0.001 – 0.25", live: "Round 18,204", href: "#", wide: true },
+  { id: "blackjack", name: "Blackjack", kind: "House · 6 decks", why: "The whole shoe order is committed before the first card.", stakes: "ⓩ 0.005 – 0.5", live: "Live", href: "/table/blackjack" },
+  { id: "dice", name: "Dice", kind: "House · over / under", why: "HMAC(server seed, your seed, nonce). Check it yourself.", stakes: "ⓩ 0.001 – 0.25", live: "Live", href: "/table/dice" },
+  { id: "crash", name: "Crash", kind: "House · multiplayer", why: "Cash out before it busts. Bettors are just session hashes.", stakes: "ⓩ 0.001 – 0.25", live: "Round 18,204", href: "/table/crash", wide: true },
 ];
 
 export default function Lobby() {

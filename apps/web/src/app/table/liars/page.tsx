@@ -67,7 +67,7 @@ export default function Liars() {
         </div>
         <div className="lp-center">
           <ChipStack values={[0.05, 0.05, 0.05]} size={46} />
-          <div className="bid-card">
+          <div className="bid-card" style={verdictText ? { visibility: "hidden" } : undefined}>
             {bid ? <><small>{bid.by} bids</small><b>{WORDS[bid.q]} × </b><Die value={bid.f} size={40} /></> : <small>Shake your cup to start the round</small>}
           </div>
         </div>
