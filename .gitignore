@@ -3,3 +3,5 @@ spike/w_*
 spike/*.age
 spike/*.ufvk
 target/
+node_modules/
+.next/
