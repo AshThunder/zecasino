@@ -20,6 +20,7 @@ export default function Dice() {
   const [rolling, setRolling] = useState(false);
   const [last, setLast] = useState<Roll | null>(null);
   const [hist, setHist] = useState<Roll[]>([]);
+  const [err, setErr] = useState<string | null>(null);
   const readout = useRef<HTMLSpanElement>(null);
   const { contextSafe } = useGSAP({ scope });
 
@@ -32,7 +33,10 @@ export default function Dice() {
     if (rolling || stake === 0 || !seat.ready) return;
     setRolling(true); play("shake", 0.5);
     const commitment = seat.commitment;
-    const { nonce, outcome } = await seat.bet<number>("dice", { target: Math.round(target * 100), over, stake });
+    let res: { nonce: number; outcome: number };
+    try { setErr(null); res = await seat.bet<number>("dice", { target: Math.round(target * 100), over, stake }); }
+    catch (e) { setErr((e as Error).message); setRolling(false); return; }
+    const { nonce, outcome } = res;
     const v = outcome / 100;
     const win = over ? v > target : v < target;
     const o = { x: last?.roll ?? 50 };
@@ -56,6 +60,7 @@ export default function Dice() {
           <span ref={readout} className={`roll ${rolling || !last ? "" : last.win ? "win" : "lose"}`}>{last ? last.roll.toFixed(2) : "–.––"}</span>
           <small>{last && !rolling ? (last.win ? `Win · ⓩ ${(stake * mult).toFixed(4)}` : "No win") : `Roll ${over ? "over" : "under"} ${target.toFixed(2)}`}</small>
         </div>
+        {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
         <div className="dtrack">
           <div className="rail" style={{ background: rail }} />
           <input type="range" min={2} max={98} step={0.5} value={target} disabled={rolling} aria-label="Target"

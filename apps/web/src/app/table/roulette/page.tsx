@@ -5,7 +5,8 @@ import { useGSAP } from "@gsap/react";
 import { RouletteWheel, POCKET_STEP } from "@/components/RouletteWheel";
 import { RouletteLayout, type BetKey } from "@/components/RouletteLayout";
 import { ChipRack } from "@/components/ChipRack";
-import { FairPanel } from "@/components/FairPanel";
+import { HouseFair } from "@/components/HouseFair";
+import { useSeat } from "@/lib/house";
 import { WHEEL_ORDER, RED, colorOf } from "@/lib/roulette";
 import { play, ballRoll } from "@/lib/sfx";
 
@@ -32,16 +33,22 @@ export default function Roulette() {
   const [history, setHistory] = useState<number[]>([32, 0, 17, 5, 26, 11, 30, 8, 19, 3]);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<{ n: number; win: number } | null>(null);
-  const [nonce, setNonce] = useState(412);
+  const seat = useSeat();
+  const [err, setErr] = useState<string | null>(null);
+  const [verifiable, setVerifiable] = useState<{ nonce: number; outcome: number; seed: string }[]>([]);
   const { contextSafe } = useGSAP({ scope });
 
   const total = Object.values(bets).flat().reduce((a, b) => a + b, 0);
   const place = (k: BetKey) => { if (spinning) return; play("chip"); setResult(null); setBets(b => ({ ...b, [k]: [...(b[k] ?? []), chip] })); };
 
-  const spin = contextSafe(() => {
-    if (spinning || total === 0) return;
-    setSpinning(true); setResult(null);
-    const n = WHEEL_ORDER[Math.floor(Math.random() * 37)];
+  const spin = contextSafe(async () => {
+    if (spinning || total === 0 || !seat.ready) return;
+    setSpinning(true); setResult(null); setErr(null);
+    const commitment = seat.commitment;
+    let r: { nonce: number; outcome: number };
+    try { r = await seat.bet<number>("roulette", { bets: Object.entries(bets).map(([k, v]) => [k, v.reduce((a, b) => a + b, 0)]) }); }
+    catch (e) { setSpinning(false); setErr((e as Error).message); return; }
+    const n = r.outcome;
     const idx = WHEEL_ORDER.indexOf(n);
     const dur = 6.2;
     const w0 = wheelRot.current, w1 = w0 + 360 * 3 + Math.random() * 360;
@@ -53,7 +60,7 @@ export default function Roulette() {
     ballRoll(dur - 0.8);
     const tl = gsap.timeline({ onComplete: () => {
       const win = Object.entries(bets).reduce((a, [k, v]) => a + payout(k, n) * v.reduce((x, y) => x + y, 0), 0);
-      setResult({ n, win }); setHistory(h => [n, ...h].slice(0, 14)); setSpinning(false); setNonce(x => x + 1);
+      setResult({ n, win }); setHistory(h => [n, ...h].slice(0, 14)); setSpinning(false); setVerifiable(h => [{ nonce: r.nonce, outcome: n, seed: commitment }, ...h].slice(0, 20));
       play(win > 0 ? "stack" : "collide", 0.6);
     } });
     tl.to(wheel.current, { rotation: w1, svgOrigin: "0 0", duration: dur, ease: "power3.out" }, 0)
@@ -79,10 +86,11 @@ export default function Roulette() {
             <div className="ctl">
               <div className="bet-total"><small>Total bet</small><b>ⓩ {total.toFixed(3)}</b></div>
               <button className="btn ghost" onClick={() => { setBets({}); setResult(null); play("collide", 0.4); }} disabled={spinning}>Clear</button>
-              <button className="btn gold lg" onClick={spin} disabled={spinning || total === 0}>{spinning ? "No more bets" : "Spin"}</button>
+              <button className="btn gold lg" onClick={spin} disabled={spinning || total === 0 || !seat.ready}>{spinning ? "No more bets" : "Spin"}</button>
             </div>
           </div>
         </div>
+        {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
         {result && (
           <div className={`result-toast ${colorOf(result.n)}`} role="status">
             <span className="rn">{result.n}</span>
@@ -90,7 +98,7 @@ export default function Roulette() {
           </div>
         )}
       </div>
-      <FairPanel commitment="9b1f4c0e…e27a5d13" clientSeed="lagos-night-77" nonce={nonce} />
+      <HouseFair seat={seat} game="roulette" bets={verifiable} fmt={o => String(o)} formula="Pocket = unbiased(HMAC-SHA256(server seed, “client seed:nonce:cursor”)) mod 37, by rejection sampling. Rotate to reveal the seed and recheck every spin." />
     </div>
   );
 }

@@ -427,3 +427,4 @@ html:has(.cashier[open]) { overflow: hidden; }
 @keyframes pulse { to { box-shadow: 0 0 0 6px #F4B72833, 0 6px 20px -8px #F4B72899; } }
 @media (max-width: 900px) { .crash-grid { grid-template-columns: 1fr; } }
 .crash-grid > .crash-players { height: 0; min-height: 100%; }
+.fair dd.ok { color: #5BD08F; } .fair dd.bad { color: #FF6B6B; }

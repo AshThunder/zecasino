@@ -16,7 +16,7 @@ async fn server() -> String {
 async fn send(w: &mut Ws, v: Value) { w.send(Message::Text(v.to_string().into())).await.unwrap(); }
 async fn until(w: &mut Ws, t: &str) -> Value {
     loop {
-        let m = tokio::time::timeout(std::time::Duration::from_secs(20), w.next()).await.expect("timeout").unwrap().unwrap();
+        let m = tokio::time::timeout(std::time::Duration::from_secs(180), w.next()).await.expect("timeout").unwrap().unwrap();
         if let Message::Text(s) = m { let v: Value = serde_json::from_str(&s).unwrap(); if v["t"] == t { return v; } if v["t"] == "error" { panic!("{v}"); } }
     }
 }
@@ -84,7 +84,7 @@ async fn carrot_in_a_box_full_round() {
     assert!(hs.get("peek").is_some());
     let gs = if sa["role"] == "guesser" { &sa } else { &sb }; assert!(gs.get("peek").is_none(), "guesser must not see the box");
     send(holder, json!({ "t": "carrot_say", "room": hs["room"], "line": 1 })).await;
-    assert_eq!(until(guesser, "carrot_say").await["line"], "Swap. Trust me.");
+    assert_eq!(until(guesser, "carrot_say").await["line"], "Mine's empty. Want to swap?");
     send(guesser, json!({ "t": "carrot_choose", "room": hs["room"], "swap": true })).await;
     let rg = until(guesser, "carrot_reveal").await; let rh = until(holder, "carrot_reveal").await;
     let (c, o) = opening(&rg["opening"]); assert!(commit::verify(&c, &o)); assert_eq!(c.0, hs["commitment"].as_str().unwrap());

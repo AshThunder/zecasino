@@ -4,13 +4,13 @@ import { verifyBet, type Game, type Revealed } from "@/lib/house";
 
 type SeatView = { commitment: string; clientSeed: string; nonce: number; remote: boolean; rotate: (cs: string) => Promise<Revealed> };
 /** Provably-fair panel with real rotate + in-browser verification of every bet under the old seed. */
-export function HouseFair({ seat, game, bets, fmt, formula }: { seat: SeatView; game: Game; bets: { nonce: number; outcome: unknown; seed: string }[]; fmt: (o: unknown) => string; formula: string }) {
+export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { seat: SeatView; game: Game; bets: { nonce: number; outcome: unknown; seed: string }[]; fmt: (o: unknown) => string; formula: string; check?: (verified: unknown, recorded: unknown) => boolean; extra?: React.ReactNode }) {
   const [cs, setCs] = useState(seat.clientSeed);
   const [checks, setChecks] = useState<{ rev: Revealed; rows: { nonce: number; ok: boolean; v: string }[] } | null>(null);
   const rotate = async () => {
     const rev = await seat.rotate(cs.trim() || "zecasino");
     const mine = bets.filter(b => b.seed === rev.commitment);
-    const rows = await Promise.all(mine.slice(0, 6).map(async b => { const v = await verifyBet(rev, game, b.nonce); return { nonce: b.nonce, ok: JSON.stringify(v) === JSON.stringify(b.outcome), v: v === null ? "seed mismatch" : fmt(v) }; }));
+    const rows = await Promise.all(mine.slice(0, 6).map(async b => { const v = await verifyBet(rev, game, b.nonce); return { nonce: b.nonce, ok: v !== null && (check ? check(v, b.outcome) : JSON.stringify(v) === JSON.stringify(b.outcome)), v: v === null ? "seed mismatch" : fmt(check ? b.outcome : v) }; }));
     setChecks({ rev, rows });
   };
   return (
@@ -31,6 +31,7 @@ export function HouseFair({ seat, game, bets, fmt, formula }: { seat: SeatView; 
           {checks.rows.map(r => <div key={r.nonce} className="vrow mono"><span>#{r.nonce}</span><span>{r.v}</span><b className={r.ok ? "ok" : "bad"}>{r.ok ? "✓ match" : "✗ mismatch"}</b></div>)}
         </div>
       )}
+      {extra}
       <p>{formula}</p>
     </aside>
   );

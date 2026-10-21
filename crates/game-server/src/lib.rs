@@ -124,6 +124,7 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let b = app.ledger.lock().await.apply(tok, amt as i64, "deposit", "dev").map_err(lerr)?;
             json!({ "t": "balance", "id": id, "balance": b })
         }
+        "seat_get" => json!({ "t": "seat", "id": id, "seat": app.seat_view(tok).await }),
         "balance" => json!({ "t": "balance", "id": id, "balance": app.ledger.lock().await.balance(tok).map_err(lerr)? }),
         "seed" => {
             app.seats.lock().await.get_mut(tok).unwrap().set_client_seed(v["client_seed"].as_str().unwrap_or("")).map_err(|_| "bad client seed")?;
@@ -231,7 +232,8 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             json!({ "t": "queued", "id": id, "game": "carrot" })
         }
         "carrot_say" => {
-            const LINES: [&str; 6] = ["I'd keep mine if I were you.", "Swap. Trust me.", "There's definitely a carrot in here.", "Mine's empty, honestly.", "You look like a swapper.", "Take your time."];
+            // Same lines as apps/web/src/app/table/carrot/page.tsx; free text is not allowed (no chat to moderate, nothing identifying).
+            const LINES: [&str; 4] = ["I've got the carrot.", "Mine's empty. Want to swap?", "You should keep yours.", "I'd swap if I were you."];
             let line = LINES.get(v["line"].as_u64().unwrap_or(99) as usize).ok_or("unknown line")?;
             let rooms = app.carrots.lock().await; let g = rooms.get(v["room"].as_str().unwrap_or("")).ok_or("no room")?;
             if g.holder.token != tok { return Err("only the holder talks"); }
