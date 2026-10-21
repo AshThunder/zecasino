@@ -913,3 +913,11 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
   .tag { display: none; } .hdr-right { gap: 10px; min-width: 0; } .nav a, .nav button { padding-inline: 10px; }
   .shield-pill { font-size: 0; gap: 0; padding: 8px; } .shield-pill svg { width: 16px; height: 18px; }
 }
+.mobile-sheet .ms-key { display: grid; text-align: left; gap: 2px; background: #1b160b; border: 1px solid #F4B72855; border-radius: 12px; color: #F5F1E6; padding: 12px 14px; font: 600 .95rem var(--font-body); cursor: pointer; }
+.mobile-sheet .ms-key span { font-weight: 400; font-size: .76rem; color: #CFE5D8aa; }
+@media (max-width: 640px) { .session-key { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; z-index: 95; } }
+.rc { min-width: 0; max-width: 100%; } .rc-code { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .rc-file { min-width: 0; flex-basis: 100%; } .rc-actions > .btn { flex: 1; } }
+.rc { grid-template-columns: minmax(0, 1fr); box-sizing: border-box; }
+.rc > * { min-width: 0; }
+dialog.cashier > .rc { margin: 0 16px 14px; }

@@ -47,7 +47,7 @@ function GamesMenu({ path }: { path: string }) {
 }
 
 /** Small screens: one sheet with every table and page. */
-function MobileMenu({ path }: { path: string }) {
+function MobileMenu({ path, onKey }: { path: string; onKey: () => void }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => { document.body.classList.toggle("menu-open", open); }, [open]);
@@ -59,6 +59,7 @@ function MobileMenu({ path }: { path: string }) {
       <Link href="/" className={path === "/" ? "on" : ""}>Lobby</Link>
       <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
+      <small>Your session</small><button className="ms-key" onClick={() => { setOpen(false); onKey(); }}>Session key &amp; recovery code<span>Save it, or restore another session</span></button>
       <small>Mode</small><div className="ms-wrap"><ModeSwitch /></div>
       <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link><Link href="/history" className={path === "/history" ? "on" : ""}>Session history</Link>
     </nav>, document.body)}
@@ -96,7 +97,7 @@ export function Header() {
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />{muted ? <path d="m16 9 5 6m0-6-5 6" stroke="currentColor" strokeWidth="2" /> : <path d="M16 8a5 5 0 0 1 0 8M18.5 5.5a8.5 8.5 0 0 1 0 13" stroke="currentColor" strokeWidth="2" fill="none" />}</svg>
         </button>
         <button className="btn gold" onClick={() => setOpen(true)}>Cashier</button>
-        <MobileMenu path={path} />
+        <MobileMenu path={path} onKey={() => setKeyOpen(true)} />
       </div>
       <CashierDialog open={open} onClose={() => setOpen(false)} />
       <DepositShield />
