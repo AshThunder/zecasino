@@ -11,7 +11,7 @@ async function toQa(ctx) {
   await ctx.addInitScript(qa => { const W = window.WebSocket; window.WebSocket = class extends W { constructor(u, p) { super(String(u).replace("ws://127.0.0.1:3200/ws", qa), p); } }; }, QA_WS);
   await ctx.route(/127\.0\.0\.1:3200\//, r => r.continue({ url: r.request().url().replace(/http:\/\/127\.0\.0\.1:3200/, QA_HTTP) }));
 }
-const BASE = "http://localhost:3100";
+const BASE = process.env.ZC_BASE || "http://localhost:3100";
 const results = [];
 function ledger(token) {
   const id = crypto.createHash("sha256").update(token).digest("hex");
