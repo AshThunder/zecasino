@@ -119,7 +119,7 @@ pub struct Deposit { pub txid: String, pub pool: &'static str, pub output_index:
 /// Every non-change shielded output received by the house account.
 pub fn deposits(db_path: &Path, tip: u32) -> anyhow::Result<Vec<Deposit>> {
     let c = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let mut st = c.prepare("SELECT txid, output_pool, output_index, value, mined_height, diversifier_index_be, memo FROM v_tx_outputs WHERE is_sent_row = 0 AND is_change = 0 AND to_account_uuid IS NOT NULL AND output_pool != 0")?;
+    let mut st = c.prepare("SELECT txid, output_pool, output_index, value, tx_mined_height, diversifier_index_be, memo FROM v_tx_outputs WHERE is_change = 0 AND to_account_uuid IS NOT NULL AND from_account_uuid IS NULL AND output_pool != 0")?;
     let rows = st.query_map([], |r| {
         let mut txid: Vec<u8> = r.get(0)?; txid.reverse();
         let pool: i64 = r.get(1)?;

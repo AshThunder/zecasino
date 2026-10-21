@@ -450,3 +450,5 @@ html:has(.cashier[open]) { overflow: hidden; }
 .sol-path li { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; color: #C9C1AE; }
 .sol-path em { font-style: normal; color: #F4B728; font-family: ui-monospace, monospace; }
 .sol-foot { margin-top: 18px; font-size: 13px; color: #8E8676; max-width: 900px; }
+.table-page.solvency-page { display: block; }
+.solvency-page .sol-tree dd { word-break: break-all; }
