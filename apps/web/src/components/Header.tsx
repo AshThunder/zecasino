@@ -1,6 +1,6 @@
 "use client";
 import { Toaster } from "./Toaster";
-import { RecoveryCard } from "./Recovery";
+import { RecoveryCard, RestoreDialog } from "./Recovery";
 import { toast } from "@/lib/toast";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -49,17 +49,20 @@ function GamesMenu({ path }: { path: string }) {
 /** Small screens: one sheet with every table and page. */
 function MobileMenu({ path, onKey }: { path: string; onKey: () => void }) {
   const [open, setOpen] = useState(false);
+  const [restore, setRestore] = useState(false);
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => { document.body.classList.toggle("menu-open", open); }, [open]);
   return (<>
     <button className="icon-btn burger" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(o => !o)}>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">{open ? <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" /> : <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" />}</svg>
     </button>
+    {restore && <RestoreDialog onClose={() => setRestore(false)} />}
     {open && createPortal(<nav className="mobile-sheet" aria-label="Menu">
       <Link href="/" className={path === "/" ? "on" : ""}>Lobby</Link>
       <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>Your session</small><button className="ms-key" onClick={() => { setOpen(false); onKey(); }}>Session key &amp; recovery code<span>Save it, or restore another session</span></button>
+      <button className="ms-key restore-entry" onClick={() => { setOpen(false); setRestore(true); }}>Restore session<span>Paste a recovery code or open a backup file</span></button>
       <small>Mode</small><div className="ms-wrap"><ModeSwitch /></div>
       <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link><Link href="/history" className={path === "/history" ? "on" : ""}>Session history</Link>
     </nav>, document.body)}

@@ -1,5 +1,5 @@
 "use client";
-import { RecoveryCard, recoverySaved } from "./Recovery";
+import { RecoveryCard, RestoreDialog, recoverySaved } from "./Recovery";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { DEMO, getClient, toZat } from "@/lib/server";
@@ -16,6 +16,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [credited, setCredited] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [saved, setSaved] = useState(true);
+  const [restore, setRestore] = useState(false);
   useEffect(() => { if (open) setSaved(recoverySaved()); }, [open]);
   const address = live?.address ?? "";
   const uri = live ? `zcash:${live.address}` : "";
@@ -52,6 +53,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
       <div className="cashier-head">
         <ZMark size={30} />
         <div><h2 id="cashier-title">Cashier</h2><p>Shielded in, shielded out. No account.</p></div>
+        <button className="btn ghost sm restore-entry" onClick={() => setRestore(true)}>Restore session</button>
         <button className="icon-btn" onClick={onClose} aria-label="Close">
           <svg width="18" height="18" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" /></svg>
         </button>
@@ -102,6 +104,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
           {wd && <p className={`wd-msg ${wd.ok ? "ok" : "bad"}`} role="status">{wd.text}</p>}
         </form>
       )}
+    {restore && <RestoreDialog onClose={() => setRestore(false)} />}
     </dialog>
   );
 }

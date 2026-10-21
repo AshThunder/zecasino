@@ -32,4 +32,22 @@ const q = require("./lib"); const fs = require("fs");
   rec("Recovery", "wrong passphrase refused", await p3.locator(".rs-err").count() === 1);
   await p3.locator(".restore input[type=password]").fill("correct horse"); await p3.getByRole("button", { name: "Restore session" }).click(); await p3.waitForTimeout(3000);
   rec("Recovery", "restore by sealed backup file", await p3.evaluate(() => sessionStorage.getItem("zc.session")) === s.token);
+  // entry points: Cashier (desktop + mobile) and the menu sheet (mobile/tablet) open the same restore dialog
+  for (const [tag, vp] of [["desktop", { width: 1440, height: 900 }], ["tablet", { width: 1024, height: 768 }], ["mobile", { width: 390, height: 844 }]]) {
+    const c = await br.newContext({ viewport: vp }); await q.toQa(c); await c.addInitScript(() => localStorage.setItem("zc.howto.seen", "all")); const pg = await c.newPage();
+    await pg.goto(q.BASE + "/table/dice", { waitUntil: "networkidle" }); await pg.waitForTimeout(800);
+    await pg.getByRole("button", { name: "Cashier" }).click(); await pg.waitForTimeout(500);
+    await pg.screenshot({ path: `../screenshots/after/r2-after/restore-entry-cashier-${tag}.png` });
+    await pg.locator(".cashier .restore-entry").click(); await pg.waitForTimeout(400);
+    rec("Recovery", `Cashier → Restore session opens the dialog (${tag})`, await pg.locator("dialog.restore[open]").count() === 1);
+    await pg.screenshot({ path: `../screenshots/after/r2-after/restore-entry-cashier-dialog-${tag}.png` });
+    await pg.keyboard.press("Escape"); await pg.keyboard.press("Escape"); await pg.waitForTimeout(300);
+    if (tag !== "desktop") {
+      await pg.reload({ waitUntil: "networkidle" }); await pg.locator(".burger").click(); await pg.waitForTimeout(300);
+      await pg.screenshot({ path: `../screenshots/after/r2-after/restore-entry-menu-${tag}.png` });
+      await pg.locator(".mobile-sheet .restore-entry").click(); await pg.waitForTimeout(400);
+      rec("Recovery", `Menu sheet → Restore session opens the dialog (${tag})`, await pg.locator("dialog.restore[open]").count() === 1);
+      await pg.screenshot({ path: `../screenshots/after/r2-after/restore-entry-menu-dialog-${tag}.png` });
+    }
+    await c.close(); }
   await br.close(); process.exit(fails ? 1 : 0); })();

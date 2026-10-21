@@ -921,3 +921,5 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
 .rc { grid-template-columns: minmax(0, 1fr); box-sizing: border-box; }
 .rc > * { min-width: 0; }
 dialog.cashier > .rc { margin: 0 16px 14px; }
+.cashier-head .restore-entry { margin-left: auto; white-space: nowrap; }
+@media (max-width: 640px) { .cashier-head { flex-wrap: wrap; } .cashier-head .restore-entry { order: 3; margin-left: 0; } }
