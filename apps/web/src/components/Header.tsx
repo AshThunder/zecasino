@@ -52,6 +52,7 @@ function GamesMenu({ path }: { path: string }) {
 function MobileMenu({ path, onKey }: { path: string; onKey: () => void }) {
   const [open, setOpen] = useState(false);
   const [restore, setRestore] = useState(false);
+  const [demo, setDemo] = useState(true); useEffect(() => setDemo(DEMO), []);
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => { document.body.classList.toggle("menu-open", open); }, [open]);
   return (<>
@@ -64,7 +65,7 @@ function MobileMenu({ path, onKey }: { path: string; onKey: () => void }) {
       <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>Your session</small><button className="ms-key" onClick={() => { setOpen(false); onKey(); }}>Session key &amp; recovery code<span>Save it, or restore another session</span></button>
-      {!DEMO && <a className="ms-key ms-faucet" href={FAUCET_URL} target="_blank" rel="noopener noreferrer">Get free testnet TAZ ↗<span>Public Zcash testnet faucet · testnet coins have no value</span></a>}
+      {!demo && <a className="ms-key ms-faucet" href={FAUCET_URL} target="_blank" rel="noopener noreferrer">Get free testnet TAZ ↗<span>Public Zcash testnet faucet · testnet coins have no value</span></a>}
       <button className="ms-key restore-entry" onClick={() => { setOpen(false); setRestore(true); }}>Restore session<span>Paste a recovery code or open a backup file</span></button>
       <small>Mode</small><div className="ms-wrap"><ModeSwitch /></div>
       <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link><Link href="/history" className={path === "/history" ? "on" : ""}>Session history</Link>
@@ -78,7 +79,7 @@ export function Header() {
   useEffect(() => { if (sessionStorage.getItem("zc.restored") && live.balance != null) { sessionStorage.removeItem("zc.restored"); toast({ kind: "success", title: "Session restored", body: `Balance ⓩ ${live.balance.toFixed(4)} is back in this browser.` }); } }, [live.balance]);
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const [muted, setM] = useState(isMuted());
+  const [muted, setM] = useState(false); useEffect(() => setM(isMuted()), []);
   const [keyOpen, setKeyOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [demo, setDemo] = useState(true); useEffect(() => setDemo(DEMO), []);

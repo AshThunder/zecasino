@@ -6,9 +6,9 @@ import { DEMO, getClient, setMode } from "@/lib/server";
 export function DemoBar() {
   const [on, setOn] = useState(false); const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => { setOn(DEMO); document.body.classList.toggle("demo-mode", DEMO); }, []);
-  if (!on) return null;
   useEffect(() => { const f = () => { refill(); }; addEventListener("zc:demo-refill", f); return () => removeEventListener("zc:demo-refill", f); }); // eslint-disable-line react-hooks/exhaustive-deps
   const refill = async () => { const c = await getClient(); if (!c) { setMsg("Demo server offline"); return; } await c.rpc({ t: "demo_refill" }); setMsg("Topped up to 5 play chips"); setTimeout(() => setMsg(null), 2000); };
+  if (!on) return null;
   return (
     <div className="demo-bar" role="note">
       <span className="db-tag">Demo</span>
