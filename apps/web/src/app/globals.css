@@ -433,3 +433,20 @@ html:has(.cashier[open]) { overflow: hidden; }
 .lp-lobby small { color: #CFE5D8aa; font-size: .78rem; }
 .lp-tag em.bad { color: #FF6B6B; }
 .mp-steps li.bad .mp-n { background: #A8161F; }
+.solvency-page .sol-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 8px 0 22px; }
+.sol-card { background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); border: 1px solid rgba(244,183,40,.22); border-radius: 16px; padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }
+.sol-card small { text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: #C9B27A; }
+.sol-card b { font-family: var(--font-display, serif); font-size: 34px; color: #F4B728; }
+.sol-card span { font-size: 13px; color: #A89F8C; }
+.sol-card.short b { color: #E2504A; }
+.sol-bar { height: 8px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 6px; }
+.sol-bar i { display: block; height: 100%; background: linear-gradient(90deg, #C98F12, #F4B728); border-radius: 99px; }
+.sol-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.sol-cols .fair { position: static; width: auto; }
+.sol-tree dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+.sol-result { margin-top: 14px; padding: 14px; border-radius: 12px; border: 1px solid rgba(66,170,110,.5); background: rgba(66,170,110,.08); }
+.sol-result.bad { border-color: rgba(226,80,74,.6); background: rgba(226,80,74,.08); }
+.sol-path { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; font-size: 12px; }
+.sol-path li { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; color: #C9C1AE; }
+.sol-path em { font-style: normal; color: #F4B728; font-family: ui-monospace, monospace; }
+.sol-foot { margin-top: 18px; font-size: 13px; color: #8E8676; max-width: 900px; }

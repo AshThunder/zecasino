@@ -9,7 +9,7 @@ import { useSyncExternalStore } from "react";
 import { getClient, serverState } from "@/lib/server";
 import { isMuted, setMuted } from "@/lib/sfx";
 
-const NAV = [["Lobby", "/"], ["Carrot in a Box", "/table/carrot"], ["Roulette", "/table/roulette"], ["Provably fair", "/#fair"], ["Solvency", "/#solvency"]] as const;
+const NAV = [["Lobby", "/"], ["Carrot in a Box", "/table/carrot"], ["Roulette", "/table/roulette"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
 
 export function Header() {
   const live = useSyncExternalStore(serverState.subscribe, serverState.get, serverState.server);
