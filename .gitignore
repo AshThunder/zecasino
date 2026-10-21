@@ -8,3 +8,4 @@ node_modules/
 *.sqlite*
 .env*.local
 run/
+qa/node_modules
