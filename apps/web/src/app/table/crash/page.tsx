@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import gsap from "gsap";
 import { useEffect, useRef, useState } from "react";
 import { ChipRack } from "@/components/ChipRack";
@@ -165,7 +166,7 @@ export default function Crash() {
   return (
     <div className="table-page crash-page">
       <div className="table-head">
-        <div><p className="eyebrow">House game · multiplayer · max 1000×{round ? ` · round ${round.toLocaleString()}` : ""}</p><h1>Crash</h1></div>
+        <div><p className="eyebrow">House game · multiplayer · max 1000×{round ? ` · round ${round.toLocaleString()}` : ""}</p><div className="th-title"><h1>Crash</h1><HowTo game="crash" /></div></div>
       </div>
       <div className="felt crash-felt">
         <div className="bust-strip" aria-label="Recent busts">

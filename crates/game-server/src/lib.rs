@@ -24,6 +24,8 @@ use pvp::{Carrot, Liars, Player};
 
 type Tx = mpsc::UnboundedSender<String>;
 pub const MAX_STAKE: u64 = 50_000_000; // 0.5 TAZ
+/// Play chips every demo session starts with (and refills to).
+pub const DEMO_CHIPS: u64 = 500_000_000;
 
 pub struct Waiting { pub player: Player, pub stake: u64 }
 
@@ -51,6 +53,8 @@ pub struct App {
     pvp_seen: Mutex<HashMap<String, std::time::Instant>>,
     pub hm_proto_ms: std::sync::atomic::AtomicU64,
     pub dev_credit: bool,
+    /// Demo instance: its own database, no cashier, every session starts with play chips. Never the real ledger.
+    pub demo: bool,
     pub zec: Option<cashier::Zec>,
 }
 
@@ -68,7 +72,7 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(ledger), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new(first_round)), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), anchor: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), anchor: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, demo: false, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
@@ -161,7 +165,7 @@ async fn lobby(State(app): State<Arc<App>>) -> Json<Value> {
         "holdem": { "rooms": app.holdems.lock().await.len(), "waiting": app.holdem_wait.lock().await.len() },
         "crash": { "round": crash_round, "bettors": crash_bettors },
     });
-    Json(json!({ "liabilities_zat": liab, "reserve_zat": reserve, "hot_zat": hot,
+    Json(json!({ "demo": app.demo, "liabilities_zat": liab, "reserve_zat": reserve, "hot_zat": hot,
         "coverage": reserve.map(|r| if liab == 0 { Value::Null } else { json!(r as f64 / liab as f64) }),
         "anchor": a.as_ref().map(|a| json!({ "height": a["height"], "digest": a["digest"], "block_hash": a["block_hash"], "count": a["commitments"].as_array().map(|x| x.len()) })),
         "transparent": a.as_ref().map(|a| a["transparent_received"].as_u64().unwrap_or(0) + a["transparent_sent"].as_u64().unwrap_or(0)),
@@ -192,7 +196,10 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
         let t = v["t"].as_str().unwrap_or("");
         if t == "hello" {
             let cs = v["client_seed"].as_str().unwrap_or("zecasino");
-            let tok = match v["token"].as_str() { Some(k) if app.ledger.lock().await.exists(k) => k.to_owned(), _ => app.ledger.lock().await.create() };
+            let tok = match v["token"].as_str() { Some(k) if app.ledger.lock().await.exists(k) => k.to_owned(), _ => {
+                let t = app.ledger.lock().await.create();
+                if app.demo { let _ = app.ledger.lock().await.apply(&t, DEMO_CHIPS as i64, "deposit", "demo"); }
+                t } };
             let mut seats = app.seats.lock().await;
             if !seats.contains_key(&tok) {
                 // After a restart the seat (and any open blackjack hand) comes back from the ledger DB.
@@ -205,7 +212,7 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
             drop(seats);
             app.conns.lock().await.entry(tok.clone()).or_default().push(tx.clone());
             let bal = app.ledger.lock().await.balance(&tok).unwrap();
-            let _ = tx.send(json!({ "t": "session", "id": id, "token": tok, "balance": bal, "seat": app.seat_view(&tok).await }).to_string());
+            let _ = tx.send(json!({ "t": "session", "id": id, "token": tok, "balance": bal, "demo": app.demo, "seat": app.seat_view(&tok).await }).to_string());
             token = Some(tok);
             continue;
         }
@@ -246,6 +253,13 @@ pub async fn pvp_sweeper(app: Arc<App>) {
 async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &Tx, crash_sub: &mut Option<tokio::task::JoinHandle<()>>) -> Result<Option<Value>, &'static str> {
     let stake = v["stake"].as_u64().unwrap_or(0);
     Ok(Some(match t {
+        // Demo only: top the play chips back up to the starting stack.
+        "demo_refill" => {
+            if !app.demo { return Err("not a demo table"); }
+            let mut l = app.ledger.lock().await; let b = l.balance(tok).map_err(lerr)?;
+            let b = if b < DEMO_CHIPS { l.apply(tok, (DEMO_CHIPS - b) as i64, "deposit", "demo").map_err(lerr)? } else { b };
+            json!({ "t": "balance", "id": id, "balance": b })
+        }
         "dev_credit" => {
             if !app.dev_credit { return Err("dev credit disabled"); }
             let amt = v["amount"].as_u64().unwrap_or(0).min(100_000_000);

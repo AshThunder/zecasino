@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
@@ -158,7 +159,7 @@ export default function Holdem() {
 
   return (
     <div ref={scope} className="table-page holdem-page">
-      <div className="table-head"><div><p className="eyebrow">Player vs player · heads-up no-limit · mental-poker shuffle</p><h1>Heads-up Hold&apos;em</h1></div>
+      <div className="table-head"><div><p className="eyebrow">Player vs player · heads-up no-limit · mental-poker shuffle</p><div className="th-title"><h1>Heads-up Hold&apos;em</h1><HowTo game="holdem" /></div></div>
         <div className="blinds"><span>Blinds ⓩ 0.005 / 0.01</span><span>{handNo ? `Hand #${handNo}` : `Buy-in ⓩ ${BUY_IN.toFixed(2)}`}</span></div></div>
       <div className="poker-wrap">
         <div className="poker-rail">

@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import { PlayingCard } from "@/components/PlayingCard";
@@ -87,7 +88,7 @@ export default function Blackjack() {
 
   return (
     <div ref={scope} className="table-page bj-page">
-      <div className="table-head"><div><p className="eyebrow">House game · 6 decks · dealer stands on all 17s</p><h1>Blackjack</h1></div></div>
+      <div className="table-head"><div><p className="eyebrow">House game · 6 decks · dealer stands on all 17s</p><div className="th-title"><h1>Blackjack</h1><HowTo game="blackjack" /></div></div></div>
       <div className="felt bj-felt">
         <div className="bj-shoe"><CardShoe width={170} /></div>
         <div className="hand dealer">

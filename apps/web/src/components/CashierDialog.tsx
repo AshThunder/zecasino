@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { getClient, toZat } from "@/lib/server";
+import { DEMO, getClient, toZat } from "@/lib/server";
 import { ZMark } from "./ZMark";
 
 export function CashierDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -19,7 +19,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
 
   // Live cashier: this session's own Orchard-only address from zec-service, so no memo is needed.
   useEffect(() => {
-    if (!open) return;
+    if (!open || DEMO) return;
     let off = () => {};
     getClient().then(async c => {
       if (!c) { setOffline(true); return; }
@@ -56,7 +56,9 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
       <div className="tabs" role="tablist">
         {(["deposit", "withdraw"] as const).map(t => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "deposit" ? "Deposit" : "Withdraw"}</button>)}
       </div>
-      {tab === "deposit" ? (
+      {DEMO ? (
+        <div className="demo-cashier"><p><b>Demo tables have no cashier.</b> Play chips can&apos;t be deposited or withdrawn, and nothing here reaches the chain. Use <em>Refill chips</em> in the blue bar, or switch to Real to deposit TAZ.</p></div>
+      ) : tab === "deposit" ? (
         <div className="dep">
           <div className="qr-wrap">
             {qr ? <img src={qr} alt="ZIP-321 payment QR" width={220} height={220} /> : <div className="qr-skel" aria-hidden="true" />}

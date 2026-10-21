@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
@@ -144,7 +145,7 @@ export default function Liars() {
   const myTurn = phase === "bid" && turn === 0;
   return (
     <div ref={scope} className="table-page liars-page">
-      <div className="table-head"><div><p className="eyebrow">2–4 players · 5 dice each · ones are not wild</p><h1>Liar&apos;s Dice</h1></div></div>
+      <div className="table-head"><div><p className="eyebrow">Heads-up · 5 dice each · ones are not wild</p><div className="th-title"><h1>Liar&apos;s Dice</h1><HowTo game="liars" /></div></div></div>
       <div className="felt liars-felt">
         <div className="lp-row">
           {(others.length ? others : [{ anon: "?", name: searching ? "Finding a player…" : "Empty seat", dice: null, commitment: "", chip: 0.05 } as P]).map(p => (

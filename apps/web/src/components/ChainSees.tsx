@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getClient } from "@/lib/server";
+import { DEMO, getClient } from "@/lib/server";
 
 type Action = { nullifier: string; cmx: string; epk: string; ciphertext: string; ciphertext_len: number };
 type View = { txid: string; height: number | null; size: number; orchard: Action[]; ironwood: Action[]; sapling_outputs: number; sapling_spends: number; transparent_in: number; transparent_out: number };
@@ -21,19 +21,20 @@ export function ChainSees({ table }: { table: string }) {
       try { const r = await c.rpc({ t: "chain_view" }); setTxs(r.txs as Tx[]); } catch { setOff(true); }
       un(); un = c.on("deposit", () => setTimeout(load, 1500));
     });
-    load(); return () => un();
+    if (!DEMO) load(); return () => un();
   }, []);
   return (
     <section className="fair chain-sees" aria-labelledby={`cs-${table}`}>
       <h4 id={`cs-${table}`}>What the chain sees</h4>
       <div className="cs-row nothing"><span className="cs-k">This table</span><span><b>Nothing.</b> Rounds settle in the house ledger off-chain; placing a bet creates no transaction.</span></div>
       <div className="cs-row"><span className="cs-k">Your session</span>
-        {off ? <span className="muted">Wallet service offline.</span>
+        {DEMO ? <span className="muted">Demo session: play chips never reach the chain, so there is nothing to show.</span>
+          : off ? <span className="muted">Wallet service offline.</span>
           : !txs ? <span className="muted">Reading the chain<span className="dots" /></span>
           : !txs.length ? <span className="muted">No deposit yet. When one confirms, this shows the exact bytes a block explorer gets for it.</span>
           : <span>{txs.length} shielded transaction{txs.length > 1 ? "s" : ""}, shown as any node stores them.</span>}
       </div>
-      {txs?.map(t => { const v = t.view; const acts = v ? [...v.ironwood, ...v.orchard] : []; const pool = v?.ironwood.length ? "Ironwood" : "Orchard"; const k = t.txid;
+      {!DEMO && txs?.map(t => { const v = t.view; const acts = v ? [...v.ironwood, ...v.orchard] : []; const pool = v?.ironwood.length ? "Ironwood" : "Orchard"; const k = t.txid;
         return (
           <div key={k} className="cs-tx">
             <button className="cs-head" aria-expanded={open === k} onClick={() => setOpen(o => o === k ? null : k)}>

@@ -2,6 +2,7 @@
 import { ChainSees } from "@/components/ChainSees";
 import { useState } from "react";
 import { VerifiedRound } from "./Verified";
+import { DEMO } from "@/lib/server";
 import { verifyBet, type Game, type Revealed } from "@/lib/house";
 
 type SeatView = { commitment: string; clientSeed: string; nonce: number; remote: boolean; rotate: (cs: string) => Promise<Revealed> };
@@ -24,7 +25,7 @@ export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { se
         <dt>Your client seed</dt>
         <dd><input className="seed-input mono" value={cs} maxLength={64} onChange={e => setCs(e.target.value.replace(/\s/g, ""))} aria-label="Client seed for the next seed pair" /></dd>
         <dt>Nonce</dt><dd className="mono">{seat.nonce}</dd>
-        <dt>Dealer</dt><dd className="mono">{seat.remote ? "game server · live" : "in-browser seat (server offline)"}</dd>
+        <dt>Dealer</dt><dd className="mono">{seat.remote ? (DEMO ? "demo server · play chips" : "game server · live") : "in-browser seat (server offline)"}</dd>
       </dl>
       <button className="btn ghost sm full" onClick={rotate}>Reveal seed &amp; verify</button>
       {checks && (

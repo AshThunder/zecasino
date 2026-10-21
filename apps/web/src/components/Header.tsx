@@ -12,6 +12,7 @@ import { isMuted, setMuted } from "@/lib/sfx";
 import { GAMES } from "@/lib/games";
 import { installMotion } from "@/lib/motion";
 import { DepositShield } from "./DepositShield";
+import { DemoBar, ModeSwitch } from "./DemoBar";
 const NAV = [["Lobby", "/"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
 const PVP = GAMES.filter(g => g.kind.startsWith("Player")), HOUSE = GAMES.filter(g => !PVP.includes(g));
 
@@ -55,6 +56,7 @@ function MobileMenu({ path }: { path: string }) {
       <Link href="/" className={path === "/" ? "on" : ""}>Lobby</Link>
       <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
+      <small>Mode</small><div className="ms-wrap"><ModeSwitch /></div>
       <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link>
     </nav>, document.body)}
   </>);
@@ -67,7 +69,7 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [muted, setM] = useState(isMuted());
   const [keyOpen, setKeyOpen] = useState(false);
-  return (
+  return (<>
     <header className="hdr">
       <Link href="/" className="brand" aria-label="Zecasino lobby">
         <ZMark size={38} />
@@ -79,6 +81,7 @@ export function Header() {
         {NAV.slice(1).map(([l, h]) => <Link key={h} href={h} className={path === h ? "on" : ""}>{l}</Link>)}
       </nav>
       <div className="hdr-right">
+        <ModeSwitch />
         <button className="shield-pill" title="Session key: save it to come back to this balance" aria-expanded={keyOpen} onClick={() => setKeyOpen(o => !o)}>
           <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><path d="M7 0 14 3v5c0 4-3 7-7 8-4-1-7-4-7-8V3z" fill="#F4B728" /><path d="m4 8 2 2 4-4" stroke="#14110A" strokeWidth="1.8" fill="none" /></svg>
           Shielded session
@@ -94,7 +97,8 @@ export function Header() {
       <CashierDialog open={open} onClose={() => setOpen(false)} />
       <DepositShield />
     </header>
-  );
+    <DemoBar />
+  </>);
 }
 
 /** Your session key is the only thing that ties you to a balance. No account exists to recover it. */

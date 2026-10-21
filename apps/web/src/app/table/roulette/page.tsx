@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -78,7 +79,7 @@ export default function Roulette() {
   return (
     <div ref={scope} className="table-page roulette-page">
       <div className="table-head">
-        <div><p className="eyebrow">House game · single zero · 2.70% edge</p><h1>European Roulette</h1></div>
+        <div><p className="eyebrow">House game · single zero · 2.70% edge</p><div className="th-title"><h1>European Roulette</h1><HowTo game="roulette" /></div></div>
         <div className="history" aria-label="Recent results">
           {history.map((h, i) => <span key={i} className={`hpill ${colorOf(h)}`}>{h}</span>)}
         </div>

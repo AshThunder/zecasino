@@ -6,7 +6,15 @@ export const ZAT = 100_000_000;
 export const toZat = (taz: number) => Math.round(taz * ZAT);
 type Msg = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const URL_ = process.env.NEXT_PUBLIC_GAME_WS ?? "ws://127.0.0.1:3200/ws";
+/**
+ * Demo mode: a separate game server with its own database and no wallet service, where every session starts with
+ * play chips. Chosen per browser (localStorage), and it changes the socket and the session-key slots, so a demo
+ * session can never touch the real ledger.
+ */
+export const MODE_KEY = "zc.mode";
+export const DEMO = typeof window !== "undefined" && localStorage.getItem(MODE_KEY) === "demo";
+export function setMode(demo: boolean) { if (demo) localStorage.setItem(MODE_KEY, "demo"); else localStorage.removeItem(MODE_KEY); location.reload(); }
+const URL_ = DEMO ? (process.env.NEXT_PUBLIC_DEMO_WS ?? "ws://127.0.0.1:3201/ws") : (process.env.NEXT_PUBLIC_GAME_WS ?? "ws://127.0.0.1:3200/ws");
 const DEV_CREDIT = process.env.NEXT_PUBLIC_DEV_CREDIT === "1";
 
 class Client {
@@ -47,7 +55,7 @@ function reconnect(attempt: number) {
   }, Math.min(500 * attempt, 5000));
 }
 if (typeof window !== "undefined") (window as unknown as { __zc: unknown }).__zc = { drop: () => client?.ws.close() }; // QA hook: simulate a dropped connection
-export const SESSION_KEY = "zc.session", KEEP_KEY = "zc.session.keep";
+export const SESSION_KEY = DEMO ? "zc.demo.session" : "zc.session", KEEP_KEY = DEMO ? "zc.demo.session.keep" : "zc.session.keep";
 export const storedToken = () => sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(KEEP_KEY) ?? undefined;
 
 let client: Client | null = null; let connecting: Promise<Client | null> | null = null;
@@ -72,7 +80,8 @@ export function getClient(clientSeed = "zecasino"): Promise<Client | null> {
       const c = new Client(ws);
       const s = await c.rpc({ t: "hello", token: storedToken(), client_seed: clientSeed });
       sessionStorage.setItem(SESSION_KEY, s.token); if (localStorage.getItem(KEEP_KEY)) localStorage.setItem(KEEP_KEY, s.token); c.session = s;
-      if (DEV_CREDIT && s.balance === 0) await c.rpc({ t: "dev_credit", amount: toZat(0.412) });
+      if (DEMO !== !!s.demo) { ws.close(); connecting = null; return resolve(null); } // demo chips only on the demo server, real balance only on the real one
+      if (!DEMO && DEV_CREDIT && s.balance === 0) await c.rpc({ t: "dev_credit", amount: toZat(0.412) });
       client = c; status = "online"; connecting = null; emit(); resolve(c);
     };
   }));

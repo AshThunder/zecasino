@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
@@ -124,7 +125,7 @@ export default function CarrotTable() {
   return (
     <div ref={scope} className="table-page carrot-page">
       <div className="table-head">
-        <div><p className="eyebrow">Player vs player · heads-up · rake 2%</p><h1>Carrot in a Box</h1></div>
+        <div><p className="eyebrow">Player vs player · heads-up · rake 2%</p><div className="th-title"><h1>Carrot in a Box</h1><HowTo game="carrot" /></div></div>
         <ol className="phases">{STEPS.map(([p, l], i) => <li key={p} className={phase === p ? "on" : STEPS.findIndex(s => s[0] === phase) > i ? "done" : ""}><span>{i + 1}</span>{l}</li>)}</ol>
       </div>
       <div className="felt carrot-felt">

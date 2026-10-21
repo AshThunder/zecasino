@@ -16,6 +16,7 @@ print(b,s[0],s[1])`, id]).toString().trim().split(" ").map(Number);
 async function launch() { return chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] }); }
 async function session(br, name) {
   const ctx = await br.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.addInitScript(() => { try { localStorage.setItem("zc.howto.seen", "all"); } catch {} }); // first-visit how-to overlays are covered by qa/ux.js
   const p = await ctx.newPage();
   p.on("pageerror", e => console.log(`[${name}] PAGEERR`, e.message));
   await p.goto(BASE + "/", { waitUntil: "networkidle" });

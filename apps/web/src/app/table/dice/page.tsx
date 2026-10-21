@@ -1,4 +1,5 @@
 "use client";
+import { HowTo } from "@/components/HowTo";
 import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -53,7 +54,7 @@ export default function Dice() {
   return (
     <div ref={scope} className="table-page dice-page">
       <div className="table-head">
-        <div><p className="eyebrow">House game · over / under · 1% edge</p><h1>Dice</h1></div>
+        <div><p className="eyebrow">House game · over / under · 1% edge</p><div className="th-title"><h1>Dice</h1><HowTo game="dice" /></div></div>
         <div className="history" aria-label="Recent rolls">{hist.map(h => <span key={h.nonce} className={`hpill dpill ${h.win ? "win" : "lose"}`}>{h.roll.toFixed(2)}</span>)}</div>
       </div>
       <div className="felt dice-felt">

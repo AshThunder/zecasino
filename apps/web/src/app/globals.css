@@ -605,3 +605,39 @@ body.menu-open { overflow: hidden; }
 .v-head { display: flex; justify-content: space-between; gap: 10px; font-size: .72rem; color: var(--muted); padding-bottom: 6px; }
 .v-head code { color: #E9C46A; }
 @media (prefers-reduced-motion: reduce) { .vr-caret { transition: none; } }
+
+/* ---------- demo mode ---------- */
+.demo-bar { position: sticky; top: 0; z-index: 45; display: flex; align-items: center; gap: 14px; padding: 8px 28px; background: linear-gradient(90deg, #2B5FA8f0, #1D2B44f0); border-bottom: 1px solid #8fb4ff44; font-size: .82rem; color: #E8EEFF; }
+.db-tag { padding: 3px 9px; border-radius: 6px; background: #F1ECE1; color: #1D2B44; font-weight: 700; font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; }
+.db-text b { font-weight: 600; }
+.db-act { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.db-act em { font-style: normal; color: #cfe0ff; font-size: .76rem; }
+.demo-bar .btn.ghost { color: #E8EEFF; border-color: #ffffff44; }
+body.demo-mode .balance { border-color: #8fb4ff66; }
+body.demo-mode .balance small:last-child { visibility: hidden; position: relative; }
+body.demo-mode .balance small:last-child::after { content: "PLAY"; visibility: visible; position: absolute; left: 0; color: #8fb4ff; }
+.mode-switch { display: inline-flex; padding: 3px; border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14; }
+.mode-switch button { padding: 6px 12px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 .76rem var(--font-body), sans-serif; cursor: pointer; }
+.mode-switch button.on { background: #F4B728; color: #14110A; }
+body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
+@media (max-width: 1100px) { .hdr .mode-switch { display: none; } }
+@media (max-width: 640px) { .demo-bar { padding: 8px 14px; flex-wrap: wrap; gap: 6px 10px; font-size: .76rem; } .db-act { margin-left: 0; } }
+
+/* ---------- how to play ---------- */
+.howto-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #F4B72866; background: #ffffff08; color: #F4B728; font: 700 1rem var(--font-display), serif; cursor: pointer; transition: background .2s; flex: none; }
+.howto-btn:hover { background: #F4B7281a; }
+.howto { width: min(520px, calc(100vw - 32px)); padding: 28px 30px 24px; border-radius: 20px; border: 1px solid #F4B72844; background: #14120fF5; color: var(--ivory); box-shadow: 0 40px 100px #000c; }
+.howto::backdrop { background: #000a; backdrop-filter: blur(3px); }
+.howto h2 { font-family: var(--font-display), serif; font-size: 2rem; font-weight: 500; margin: 4px 0 18px; }
+.howto ol { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 14px; }
+.ht-step { display: grid; grid-template-columns: 30px 1fr; gap: 12px; }
+.ht-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid #F4B72888; color: #F4B728; font: 600 .8rem var(--font-mono); }
+.ht-step b { font-weight: 600; } .ht-step p { margin: 2px 0 0; font-size: .86rem; color: #CFC6B4; }
+.ht-fair { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: #F4B7280d; font-size: .8rem; color: #D8CFBD; }
+.ht-fair svg { flex: none; margin-top: 2px; }
+.ht-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.demo-cashier { padding: 20px 4px 8px; font-size: .9rem; color: #D8CFBD; }
+.ms-wrap { padding: 6px 10px 10px; }
+.th-title { display: flex; align-items: center; gap: 14px; }
+.btn.link { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: #F4B72855; }
+.btn.link:hover { color: var(--ivory); }

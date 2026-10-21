@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { TileArt } from "@/components/TileArt";
 import { HeroWheel } from "@/components/HeroWheel";
+import { useEffect, useState } from "react";
+import { DEMO, setMode } from "@/lib/server";
 import { GAMES } from "@/lib/games";
 import { useLobby, pct, type Lobby } from "@/lib/lobby";
 
@@ -20,6 +22,7 @@ function liveLabel(id: string, d: Lobby | null): string | null {
 
 export default function LobbyPage() {
   const { data, offline } = useLobby();
+  const [demo, setDemo] = useState(false); useEffect(() => setDemo(DEMO), []);
   const cov = data?.coverage ?? null;
   return (
     <div className="lobby">
@@ -30,7 +33,8 @@ export default function LobbyPage() {
           <p className="lede">Deposit to a one-time Orchard address, play provably fair tables, and cash out to any shielded wallet. No account, no email, no transparent address. The chain never learns who sat at the table.</p>
           <div className="hero-cta">
             <Link className="btn gold lg" href="/table/carrot">Take a seat</Link>
-            <a className="btn ghost lg" href="#fair">How privacy works</a>
+            <button className="btn ghost lg" onClick={() => setMode(!demo)}>{demo ? "Leave demo" : "Try with play chips"}</button>
+            <a className="btn link lg" href="#fair">How privacy works</a>
           </div>
           <dl className={`stats ${data ? "" : "loading"}`} aria-busy={!data}>
             <div title="Transparent outputs the house wallets ever received or sent, counted from the wallet databases.">
