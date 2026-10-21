@@ -10,3 +10,4 @@ node_modules/
 run/
 qa/node_modules
 notes/
+*.tsbuildinfo
