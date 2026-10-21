@@ -1,4 +1,5 @@
 "use client";
+import { useErrToast } from "@/lib/useErrToast";
 import { readable } from "@/lib/seed";
 import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
@@ -39,6 +40,7 @@ export default function Liars() {
   const [room, setRoom] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  useErrToast(err);
   const salts = useRef<Uint8Array[]>([]);
   const playersRef = useRef<P[]>([]); playersRef.current = players;
   const { contextSafe } = useGSAP({ scope });
@@ -170,7 +172,7 @@ export default function Liars() {
             {bid ? <><small>{bid.by} bids</small><b>{WORDS[bid.q]} × </b><Die value={bid.f} size={40} /></> : <small>{phase === "lobby" ? "Sit down to get matched with another player" : phase === "bid" ? (turn === 0 ? "Your opening bid" : "Waiting for the opening bid") : "Shake your cup to start the round"}</small>}
           </div></>}
         </div>
-        {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
+        
         {phase === "lobby" && <div className="lp-lobby"><button className="btn gold lg" onClick={sitDown} disabled={searching}>{searching ? "Finding a player…" : `Sit down · ⓩ ${STAKE.toFixed(3)}`}</button><small>Heads-up · server-dealt dice, sealed before the first bid</small></div>}
         {me && (
           <div className="lp me">

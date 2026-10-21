@@ -1,4 +1,5 @@
 "use client";
+import { useErrToast } from "@/lib/useErrToast";
 import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
@@ -40,6 +41,7 @@ export default function Holdem() {
   const [result, setResult] = useState<Msg | null>(null);
   const [checks, setChecks] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  useErrToast(err);
   const [notice, setNotice] = useState<string | null>(null);
   const [deadline, setDeadline] = useState(0);
   const [, tick] = useState(0);
@@ -182,7 +184,7 @@ export default function Holdem() {
               <Chip value={0.5} size={44} id="pk-me" /><div><b>You</b><small>ⓩ {z(stacks[me])}{button === me && room ? " · dealer" : ""}{handName ? ` · ${handName}` : ""}</small></div>
             </div>
             {notice && !room && <div className="result-toast" role="status"><span>{notice}</span></div>}
-            {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
+            
           </div>
         </div>
         <div className="pk-actions">

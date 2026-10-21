@@ -1,4 +1,5 @@
 "use client";
+import { useErrToast } from "@/lib/useErrToast";
 import { HowTo } from "@/components/HowTo";
 import gsap from "gsap";
 import { useEffect, useRef, useState } from "react";
@@ -136,6 +137,8 @@ export default function Crash() {
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [err, setErr] = useState<string | null>(null);
+
+  useErrToast(err);
   /** Bust: the graph jolts and flashes red (skipped under reduced motion: the colour change still shows). */
   const shake = () => {
     if (reducedMotion()) return;
@@ -212,7 +215,7 @@ export default function Crash() {
               </>}
             </svg>
             <div className="crash-flash" aria-hidden="true" />
-            {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
+            
             <div className="crash-readout" aria-live="polite">
               {phase === "betting"
                 ? <><small>Next round in</small><b>{Math.max(count, 0)}s</b><span>Place your bet</span></>

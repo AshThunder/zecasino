@@ -1,4 +1,5 @@
 "use client";
+import { useErrToast } from "@/lib/useErrToast";
 import { readable } from "@/lib/seed";
 import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
@@ -42,6 +43,7 @@ export default function CarrotTable() {
   const [seal, setSeal] = useState<{ commitment: string; value?: string; salt?: string; ok?: boolean }>({ commitment: "" });
   const local = useRef<{ value: string; salt: Uint8Array } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  useErrToast(err);
   const { contextSafe } = useGSAP(() => {
     gsap.from(".cbox", { y: 30, opacity: 0, stagger: 0.15, duration: 0.7, ease: "power3.out" });
     gsap.from(".pot .chip-stack", { y: -60, opacity: 0, duration: 0.6, ease: "back.out(1.8)", delay: 0.4 });
@@ -170,7 +172,7 @@ export default function CarrotTable() {
           </div>
         </div>
       </div>
-      {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
+      
       <div className="side-col">
         <aside className="fair">
         <h4>Sealed box</h4>

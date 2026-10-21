@@ -1,4 +1,5 @@
 "use client";
+import { useErrToast } from "@/lib/useErrToast";
 import { HowTo } from "@/components/HowTo";
 import { useRef, useState } from "react";
 import gsap from "gsap";
@@ -37,6 +38,7 @@ export default function Roulette() {
   const [result, setResult] = useState<{ n: number; win: number } | null>(null);
   const seat = useSeat();
   const [err, setErr] = useState<string | null>(null);
+  useErrToast(err);
   const [verifiable, setVerifiable] = useState<{ nonce: number; outcome: number; seed: string }[]>([]);
   const { contextSafe } = useGSAP({ scope });
 
@@ -97,7 +99,7 @@ export default function Roulette() {
             </div>
           </div>
         </div>
-        {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
+        
         {result && (
           <div className={`result-toast ${colorOf(result.n)}`} role="status">
             <span className="rn">{result.n}</span>

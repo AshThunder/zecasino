@@ -80,6 +80,7 @@ export function flyChips(values: number[], from: Element | null | undefined, to:
 /** The win moment: the table glows, the payout counts up, and chips fly from the felt into your balance. */
 export function celebrate(amount: number, felt: Element | null | undefined, { label = "You win" } = {}) {
   if (!felt || !(amount > 0)) return;
+  import("./toast").then(t => t.toast({ kind: "win", title: `${label} ⓩ ${amount.toFixed(4)}`, body: "Credited to your session balance." }));
   play("stack", 0.7); setTimeout(() => play("handle", 0.45), 380);
   const host = felt as HTMLElement;
   const burst = document.createElement("div"); burst.className = "win-burst"; burst.setAttribute("role", "status");

@@ -1,4 +1,5 @@
 "use client";
+import { toast } from "@/lib/toast";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { getClient } from "@/lib/server";
@@ -12,6 +13,7 @@ export function DepositShield() {
   useEffect(() => {
     const el = ref.current; if (dep === null || !el) return;
     play("stack", 0.6);
+    toast({ kind: "success", title: `Shielded deposit ⓩ ${dep.toFixed(4)} arrived`, body: "Credited after the house viewing key found your note." });
     if (reducedMotion()) { const t = setTimeout(() => setDep(null), 3200); return () => clearTimeout(t); }
     const path = el.querySelector<SVGPathElement>(".ds-outline")!; const len = path.getTotalLength();
     const tl = gsap.timeline({ onComplete: () => setDep(null) });

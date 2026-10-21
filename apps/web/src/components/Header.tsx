@@ -1,4 +1,6 @@
 "use client";
+import { Toaster } from "./Toaster";
+import { toast } from "@/lib/toast";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -96,6 +98,7 @@ export function Header() {
       </div>
       <CashierDialog open={open} onClose={() => setOpen(false)} />
       <DepositShield />
+      <Toaster />
     </header>
     <DemoBar />
   </>);
@@ -113,7 +116,7 @@ function SessionKey({ onClose }: { onClose: () => void }) {
       <p>This key is your balance. Closing the tab forgets it unless you save it here. Anyone holding it can spend your balance.</p>
       <div className="sk-row"><code className="mono">{show ? tok : `${tok.slice(0, 6)}${"•".repeat(20)}`}</code>
         <button className="btn ghost sm" onClick={() => setShow(s => !s)}>{show ? "Hide" : "Show"}</button>
-        <button className="btn ghost sm" onClick={() => navigator.clipboard?.writeText(tok)}>Copy</button></div>
+        <button className="btn ghost sm" onClick={() => { navigator.clipboard?.writeText(tok); toast({ kind: "info", title: "Session key copied", body: "Keep it somewhere private: it spends your balance." }); }}>Copy</button></div>
       <label className="sk-keep"><input type="checkbox" checked={keep} onChange={e => remember(e.target.checked)} /> Remember on this device (stored in this browser only)</label>
       <div className="sk-row"><input id="sk-restore" className="mono" placeholder="Paste a saved key to restore" value={paste} onChange={e => setPaste(e.target.value)} spellCheck={false} />
         <button className="btn gold sm" onClick={restore} disabled={!/^[0-9a-f]{64}$/.test(paste.trim())}>Restore</button></div>

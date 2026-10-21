@@ -1,4 +1,5 @@
 "use client";
+import { useErrToast } from "@/lib/useErrToast";
 import { HowTo } from "@/components/HowTo";
 import { useRef, useState } from "react";
 import gsap from "gsap";
@@ -23,6 +24,7 @@ export default function Dice() {
   const [last, setLast] = useState<Roll | null>(null);
   const [hist, setHist] = useState<Roll[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  useErrToast(err);
   const readout = useRef<HTMLSpanElement>(null);
   const { contextSafe } = useGSAP({ scope });
 
@@ -62,7 +64,7 @@ export default function Dice() {
           <span ref={readout} className={`roll ${rolling || !last ? "" : last.win ? "win" : "lose"}`}>{last ? last.roll.toFixed(2) : "–.––"}</span>
           <small>{last && !rolling ? (last.win ? `Win · ⓩ ${(stake * mult).toFixed(4)}` : "No win") : `Roll ${over ? "over" : "under"} ${target.toFixed(2)}`}</small>
         </div>
-        {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
+        
         <div className="dtrack">
           <div className="rail" style={{ background: rail }} />
           <input type="range" min={2} max={98} step={0.5} value={target} disabled={rolling} aria-label="Target"
