@@ -1,0 +1,14 @@
+run/
+notes/
+target/
+.git/
+screenshots/
+spike/
+qa/
+**/node_modules
+apps/web/.next
+**/*.sqlite*
+**/*.mnemonic
+**/*.key
+**/.env*
+backups/
