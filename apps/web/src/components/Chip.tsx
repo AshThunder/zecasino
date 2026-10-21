@@ -19,8 +19,8 @@ export function Chip({ value, size = 56, tilt = false, id }: { value: number; si
         ))}
         <circle cx="50" cy="50" r="33" fill={d.base} stroke={d.edge} strokeWidth="2" />
         <circle cx="50" cy="50" r="29" fill="none" stroke={d.ink} strokeOpacity=".5" strokeWidth=".8" strokeDasharray="2 2.6" />
-        <text x="50" y="47" textAnchor="middle" fontFamily="var(--font-display), serif" fontWeight="700" fontSize="19" fill={d.ink}>{d.label}</text>
-        <text x="50" y="66" textAnchor="middle" fontFamily="var(--font-body), sans-serif" fontWeight="700" fontSize="9" letterSpacing="1.6" fill={d.ink}>ⓩ TAZ</text>
+        <text x="50" y="61" textAnchor="middle" fontFamily="var(--font-body), sans-serif" fontWeight="800" fontSize={d.label.length > 3 ? 27 : 31} letterSpacing="-.5"
+          fill={d.ink} stroke={d.base} strokeWidth="2.5" paintOrder="stroke" style={{ fontVariantNumeric: "tabular-nums" }}>{d.label}</text>
         <circle cx="50" cy="50" r="47" fill={`url(#${uid}-sh)`} />
         <circle cx="50" cy="50" r="46.5" fill="none" stroke="#000" strokeOpacity=".35" />
       </g>

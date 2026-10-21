@@ -86,7 +86,7 @@ print(c.execute("select count(*) from entries where session=? and kind='bet' and
   // close the tab entirely, open a new one, restore with the saved session key
   { const url = p.url(); await p.close(); const pg = await s.ctx.newPage(); await pg.goto(q.BASE + "/", { waitUntil: "networkidle" }); await pg.waitForTimeout(1200);
     const fresh = await pg.evaluate(() => sessionStorage.getItem("zc.session"));
-    await pg.locator(".shield-pill").click(); await pg.fill("#sk-restore", s.token); await pg.getByRole("button", { name: "Restore" }).click();
+    await pg.locator(".shield-pill").click(); await pg.fill("#sk-restore", s.token); await pg.getByRole("button", { name: "Restore", exact: true }).click();
     await pg.waitForLoadState("networkidle"); await pg.waitForTimeout(1500);
     const back = await pg.evaluate(() => sessionStorage.getItem("zc.session"));
     record("Session", "closed tab restored from session key", back === s.token && fresh !== s.token);

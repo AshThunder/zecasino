@@ -894,3 +894,22 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
 .h-warn { font-size: .82rem; color: #F4B728; margin: 0 0 6px; flex-basis: 100%; }
 .hero-restore { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; font-size: .84rem; color: #CFE5D8aa; }
 .session-key .rc { margin: 12px 0 0; } .session-key { max-height: min(80vh, 640px); overflow-y: auto; }
+/* bigger, legible chips in the rack; unit lives outside the chip */
+.rack-wrap { display: grid; gap: 4px; min-width: 0; max-width: 100%; justify-items: start; }
+.rack-unit { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: #CFE5D8aa; padding-left: 14px; }
+.rack button svg { width: 64px; height: 64px; }
+@media (max-width: 640px) { .rack button svg { width: 52px; height: 52px; } .rack-wrap { width: 100%; } }
+/* crash: stage fits the viewport with the bet controls */
+.crash-graph svg { max-height: min(46vh, 420px); width: 100%; height: auto; }
+.crash-page .felt, .crash-felt { max-width: 1180px; }
+@media (min-width: 1025px) { .crash-felt { padding: 20px 24px; } .crash-felt .bust-strip { padding-bottom: 10px; } }
+/* crash stage: fixed aspect box; the SVG fills it and never sizes its parent */
+.crash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 240px); }
+.crash-graph { aspect-ratio: 560 / 400; width: 100%; max-height: min(46vh, 440px); min-width: 0; contain: size layout; margin-inline: auto; }
+.crash-graph > svg { position: absolute; inset: 0; width: 100% !important; height: 100% !important; max-height: none; }
+.bust-strip { contain: inline-size; width: 100%; } .bs-row { flex: 1 1 0; }
+@media (max-width: 900px) { .crash-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1360px) and (min-width: 641px) {
+  .tag { display: none; } .hdr-right { gap: 10px; min-width: 0; } .nav a, .nav button { padding-inline: 10px; }
+  .shield-pill { font-size: 0; gap: 0; padding: 8px; } .shield-pill svg { width: 16px; height: 18px; }
+}
