@@ -1,4 +1,5 @@
 "use client";
+import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
@@ -149,6 +150,7 @@ export default function Liars() {
     <div ref={scope} className="table-page liars-page">
       <div className="table-head"><div><p className="eyebrow">Heads-up · 5 dice each · ones are not wild</p><div className="th-title"><h1>Liar&apos;s Dice</h1><HowTo game="liars" /></div></div></div>
       <div className="felt liars-felt">
+        {searching && <WaitingScene table="liars" label="Waiting for an opponent" />}
         <div className="lp-row">
           {(others.length ? others : [{ anon: "?", name: searching ? "Finding a player…" : "Empty seat", dice: null, commitment: "", chip: 0.05 } as P]).map(p => (
             <div key={p.anon} className="lp">

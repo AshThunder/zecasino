@@ -744,3 +744,13 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
 .empty-state { text-align: center; padding: 60px 20px; border: 1px dashed #ffffff1a; border-radius: 18px; color: #CFE5D8aa; display: grid; justify-items: center; gap: 10px; }
 .empty-state h3 { font-family: var(--font-display); color: #F5F1E6; font-size: 1.5rem; margin: 6px 0 0; }
 .h-skel { display: block; width: auto; }
+/* PvP waiting scene */
+.waiting-scene { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; border-radius: inherit; background: radial-gradient(60% 60% at 50% 50%, #06140fcc, #050b08ee); backdrop-filter: blur(3px); padding: 16px; }
+.ws-card { text-align: center; max-width: 340px; display: grid; justify-items: center; gap: 4px; }
+.ws-card h3 { font-family: var(--font-display); font-size: 1.6rem; color: #F5F1E6; margin: 4px 0 0; }
+.ws-clock { color: #E9C46A; font-size: .95rem; letter-spacing: .1em; margin: 0; }
+.ws-live { color: #CFE5D8; font-size: .85rem; margin: 6px 0 0; min-height: 1.2em; }
+.ws-note { color: #CFE5D899; font-size: .78rem; line-height: 1.5; margin: 6px 0 0; }
+.ws-tip { color: #F4B728; font-size: .76rem; margin: 4px 0 0; }
+.holdem-page .poker-felt { position: relative; }
+@media (max-width: 640px) { .ws-card h3 { font-size: 1.25rem; } .ws-card svg { width: 100px; height: 100px; } }

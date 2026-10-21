@@ -1,4 +1,5 @@
 "use client";
+import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
@@ -131,6 +132,7 @@ export default function CarrotTable() {
         <ol className="phases">{STEPS.map(([p, l], i) => <li key={p} className={phase === p ? "on" : STEPS.findIndex(s => s[0] === phase) > i ? "done" : ""}><span>{i + 1}</span>{l}</li>)}</ol>
       </div>
       <div className="felt carrot-felt">
+        {searching && <WaitingScene table="carrot" label="Waiting for an opponent" />}
         <div className="felt-print" aria-hidden="true"><span>ZECASINO</span><small>CARROT IN A BOX · WINNER TAKES THE POT</small></div>
         <div className="seat top">
           <span className="avatar"><Chip value={0.05} size={46} id="av-op" /></span>

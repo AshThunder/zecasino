@@ -1,4 +1,5 @@
 "use client";
+import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
@@ -164,6 +165,7 @@ export default function Holdem() {
       <div className="poker-wrap">
         <div className="poker-rail">
           <div className="poker-felt">
+        {searching && <WaitingScene table="holdem" label="Waiting for an opponent" />}
             <div className="pk-seat top">
               <Chip value={0.05} size={44} id="pk-op" /><div><b>{room ? `anon · ${opp}` : searching ? "Finding a player…" : "Empty seat"}</b><small>{room ? `ⓩ ${z(stacks[op])}${button === op ? " · dealer" : ""}${st?.street_bet?.[op] ? ` · bet ${z(st.street_bet[op])}` : ""}` : "Unlinkable session"}</small></div>
               <div className="pk-hole">{room && (oppHole ?? [-1, -1]).map((c, i) => <PlayingCard key={i} code={c >= 0 ? code(c) : "AS"} faceUp={c >= 0} width={70} />)}</div>

@@ -33,7 +33,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
       if (mode === "disconnect") record("Carrot", "guesser disconnect mid-round, reconnects and finishes", !!done);
       if (mode === "normal") record("Carrot", "round plays to reveal (two sessions)", !!done);
       if (done) {
-        const fair = (await A.p.locator(".fair").innerText()) + (await B.p.locator(".fair").innerText());
+        const fair = (await A.p.locator("aside.fair").innerText()) + (await B.p.locator("aside.fair").innerText());
         record("Carrot", `${mode}: seal verified by both browsers`, /verified|✓/i.test(fair) && !/mismatch|✗/i.test(fair));
       }
       record("Carrot", `${mode}: ledger reconcile A`, await q.reconcile(A, "carrot A"));
@@ -57,7 +57,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
       if (can) await second.p.getByRole("button", { name: "Liar!" }).click();
       const done = await until(async () => (await A.p.getByText(/called liar/).count()) && (await B.p.getByText(/called liar/).count()), 20000);
       record("Liar's Dice", { normal: "round plays to reveal (two sessions)", disconnect: "caller disconnects mid-round, reconnects and calls", refresh: "caller refreshes mid-round, resumes and calls" }[mode], !!done);
-      if (done) { const f = (await A.p.locator(".fair").innerText()) + (await B.p.locator(".fair").innerText()); record("Liar's Dice", `${mode}: all cups verified in both browsers`, (f.match(/verified/g) || []).length >= 4 && !/mismatch/.test(f)); }
+      if (done) { const f = (await A.p.locator("aside.fair").innerText()) + (await B.p.locator("aside.fair").innerText()); record("Liar's Dice", `${mode}: all cups verified in both browsers`, (f.match(/verified/g) || []).length >= 4 && !/mismatch/.test(f)); }
       record("Liar's Dice", `${mode}: ledger reconcile A`, await q.reconcile(A, "liars A"));
       record("Liar's Dice", `${mode}: ledger reconcile B`, await q.reconcile(B, "liars B"));
     }
