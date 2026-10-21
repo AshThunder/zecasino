@@ -5,6 +5,7 @@ import { useGSAP } from "@gsap/react";
 import { Die } from "@/components/Die";
 import { DiceCup } from "@/components/DiceCup";
 import { Chip, ChipStack } from "@/components/Chip";
+import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
 import { getClient, toZat } from "@/lib/server";
 import { pvpCommit, unhex } from "@/lib/fair";
@@ -118,7 +119,7 @@ export default function Liars() {
   const reveal = contextSafe((opened: P[], r: NonNullable<typeof result>) => {
     setPlayers(opened); setResult(r); setPhase("reveal"); play("die", 0.7);
     gsap.to(".lp:not(.me) .cup", { y: -90, rotation: -8, opacity: 0.25, duration: 0.7, ease: "power3.out", stagger: 0.12 });
-    play(r.youWon ? "stack" : "collide", 0.6);
+    if (r.youWon) setTimeout(() => celebrate(STAKE * opened.length * 0.98, document.querySelector(".liars-felt")), 700); else play("collide", 0.6);
   });
   const placeBid = async () => {
     if (turn !== 0 || (bid && (q < bid.q || (q === bid.q && f <= bid.f)))) return;

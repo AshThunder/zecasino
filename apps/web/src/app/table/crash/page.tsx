@@ -6,6 +6,7 @@ import { HouseFair } from "@/components/HouseFair";
 import { ZMark } from "@/components/ZMark";
 import { useSeat } from "@/lib/house";
 import { multAt, msFor, curve } from "@/lib/crash";
+import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
 import { getClient, toZat, ZAT } from "@/lib/server";
 import { games, unhex, verifySeed } from "@/lib/fair";
@@ -27,6 +28,12 @@ export default function Crash() {
   const [bust, setBust] = useState(0);
   const [joined, setJoined] = useState(false);
   const [mine, setMine] = useState<{ bet: number; out?: number } | null>(null);
+  // Win moment only on the live transition "in the round → cashed out" (not when a refresh restores a cashed bet).
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (mine && mine.out && wasOpen.current) celebrate(mine.bet * mine.out, document.querySelector(".crash-felt"), { label: `Cashed out at ${mine.out.toFixed(2)}×` });
+    wasOpen.current = !!mine && !mine.out;
+  }, [mine]);
   const [table, setTable] = useState<Seat[]>([]);
   const [hist, setHist] = useState<{ nonce: number; outcome: number; seed: string }[]>([]);
   const [round, setRound] = useState(18204);
@@ -55,7 +62,7 @@ export default function Crash() {
         c.on("crash", m => fromSnap(m as never)),
         c.on("crash_join", m => setTable(t => t.some(x => x.id === m.anon) || m.anon === myAnon.current ? t : [...t, { id: m.anon, bet: m.stake / ZAT, target: 0 }])),
         c.on("crash_start", m => { offset.current = 0; point.current = { crash: null, nonce: m.round, seed: m.commitment }; setPhase("running"); play("handle", 0.4); }),
-        c.on("crash_out", m => { if (m.anon === myAnon.current) { setMine(me => me && { ...me, out: m.mult / 100 }); play("stack", 0.5); } else setTable(t => t.map(x => x.id === m.anon ? { ...x, out: m.mult / 100 } : x)); }),
+        c.on("crash_out", m => { if (m.anon === myAnon.current) { setMine(me => me && { ...me, out: m.mult / 100 }); } else setTable(t => t.map(x => x.id === m.anon ? { ...x, out: m.mult / 100 } : x)); }),
         c.on("crash_bust", async m => {
           if (point.current) point.current.crash = m.bust / 100;
           const ok = (await verifySeed(m.server_seed, m.commitment)) && (await games.crash(unhex(m.server_seed), m.client_seed, m.round)) === m.bust;
@@ -100,7 +107,7 @@ export default function Crash() {
       setElapsed(t); setMult(m);
       if (!remote) {
         setTable(ts => ts.map(s => !s.out && s.target <= m && s.target <= crash ? { ...s, out: s.target } : s));
-        setMine(me => { if (me && !me.out && auto > 1 && m >= auto && auto < crash) { play("stack", 0.5); return { ...me, out: auto }; } return me; });
+        setMine(me => { if (me && !me.out && auto > 1 && m >= auto && auto < crash) { return { ...me, out: auto }; } return me; });
       }
       if (t >= end) {
         setMult(p.crash!); setBust(p.crash!); setPhase("busted"); play("collide", 0.7);
@@ -128,7 +135,6 @@ export default function Crash() {
     if (!(phase === "running" && mine && !mine.out)) return;
     if (remote) { const c = await getClient(); try { const r = await c!.rpc({ t: "crash_cash" }); setMine(me => me && { ...me, out: r.mult / 100 }); } catch (e) { setErr((e as Error).message); return; } }
     else setMine({ ...mine, out: mult });
-    play("stack", 0.6);
   };
 
   // graph scaling
@@ -184,7 +190,7 @@ export default function Crash() {
         <div className="table-controls">
           <ChipRack value={chip} onChange={setChip} />
           <div className="ctl">
-            <button className="bet-spot" onClick={() => { if (!joined) { setStack(s => [...s, chip]); play("chip"); } }} disabled={joined} aria-label="Add chip to bet"><ChipStack values={stack} size={52} /></button>
+            <button className="bet-spot" onClick={e => { if (!joined) { setStack(s => [...s, chip]); flyChips([chip], document.querySelector(".rack .on"), e.currentTarget, { sound: false }); play("chip"); } }} disabled={joined} aria-label="Add chip to bet"><ChipStack values={stack} size={52} /></button>
             <div className="bet-total"><small>Bet</small><b>ⓩ {stake.toFixed(3)}</b></div>
             <label className="auto"><small>Auto cash-out</small><span><input type="number" min={1.01} max={999.99} step={0.1} value={auto} onChange={e => setAuto(Number(e.target.value))} disabled={joined} />×</span></label>
             <button className="btn ghost" onClick={() => setStack([])} disabled={joined}>Clear</button>

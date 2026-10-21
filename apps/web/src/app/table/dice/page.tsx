@@ -6,6 +6,7 @@ import { ChipRack } from "@/components/ChipRack";
 import { ChipStack } from "@/components/Chip";
 import { HouseFair } from "@/components/HouseFair";
 import { useSeat } from "@/lib/house";
+import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
 
 const EDGE = 0.99;
@@ -41,7 +42,7 @@ export default function Dice() {
     const win = over ? v > target : v < target;
     const o = { x: last?.roll ?? 50 };
     gsap.to(o, { x: v, duration: 0.9, ease: "expo.out", onUpdate: () => { if (readout.current) readout.current.textContent = o.x.toFixed(2); },
-      onComplete: () => { const r = { nonce, roll: v, win, seed: commitment, outcome }; setLast(r); setHist(h => [r, ...h].slice(0, 12)); setRolling(false); play(win ? "stack" : "die", 0.6); } });
+      onComplete: () => { const r = { nonce, roll: v, win, seed: commitment, outcome }; setLast(r); setHist(h => [r, ...h].slice(0, 12)); setRolling(false); if (win) celebrate(stake * mult, document.querySelector(".dice-felt")); else play("die", 0.6); } });
     gsap.fromTo(".dtrack .marker", { left: `${last?.roll ?? 50}%` }, { left: `${v}%`, duration: 0.9, ease: "expo.out" });
   });
 
@@ -76,7 +77,7 @@ export default function Dice() {
         <div className="table-controls">
           <ChipRack value={chip} onChange={setChip} />
           <div className="ctl">
-            <button className="bet-spot" onClick={() => { setStack(s => [...s, chip]); play("chip"); }} disabled={rolling} aria-label="Add chip to bet"><ChipStack values={stack} size={52} /></button>
+            <button className="bet-spot" onClick={e => { setStack(s => [...s, chip]); flyChips([chip], document.querySelector(".rack .on"), e.currentTarget, { sound: false }); play("chip"); }} disabled={rolling} aria-label="Add chip to bet"><ChipStack values={stack} size={52} /></button>
             <div className="bet-total"><small>Bet · pays</small><b>ⓩ {stake.toFixed(3)} · {(stake * mult).toFixed(4)}</b></div>
             <div className="dmode" role="group" aria-label="Direction">
               <button aria-pressed={!over} onClick={() => { setOver(false); setTarget(t => 100 - t); }}>Under</button>

@@ -8,6 +8,7 @@ import { ChipStack, Chip } from "@/components/Chip";
 import { FairPanel } from "@/components/FairPanel";
 import { getClient, toZat } from "@/lib/server";
 import { hex, pvpCommit, unhex } from "@/lib/fair";
+import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
 
 type Phase = "peek" | "bluff" | "decide" | "reveal";
@@ -64,7 +65,7 @@ export default function CarrotTable() {
       offs = [
         c.on("carrot_start", m => { setSearching(false); setRoom(m.room); setRole(m.role); setOpp(m.opponent); setSeal({ commitment: m.commitment }); setInHolder(m.peek ? m.peek === "carrot" : null); setPhase(m.role === "holder" ? "peek" : "bluff"); play("chip", 0.5); }),
         c.on("carrot_say", m => { setSaid(m.line); setPhase("decide"); play("chip", 0.3); }),
-        c.on("carrot_reveal", async m => { setSwap(m.swap); await openSeal(m.opening); setTimeout(() => setPhase("reveal"), m.swap ? 900 : 300); play("stack", 0.6); }),
+        c.on("carrot_reveal", async m => { setSwap(m.swap); await openSeal(m.opening); setTimeout(() => { setPhase("reveal"); if (m.you_won) celebrate(m.pot / 1e8, document.querySelector(".carrot-felt"), { label: "The carrot is yours" }); else play("collide", 0.5); }, m.swap ? 900 : 300); }),
       ];
       c.rpc({ t: "pvp_resume" }).catch(() => {}); // a refreshed tab picks its round back up
     });
@@ -96,7 +97,7 @@ export default function CarrotTable() {
     if (remote && role === "guesser") { const c = await getClient(); try { await c?.rpc({ t: "carrot_choose", room, swap: s }); } catch { /* reveal arrives as an event */ } }
     setSwap(s); play(s ? "slide" : "chip", 0.5);
     if (s) gsap.timeline().to(".mine .cbox", { x: 0, y: -40, duration: 0.25 }).to(".mine .cbox", { y: 0, duration: 0.25 });
-    if (!remote && local.current) { const l = local.current; setTimeout(async () => { await openSeal({ commitment: seal.commitment, value: l.value, salt: hex(l.salt) }); setPhase("reveal"); play("stack", 0.6); }, 1200); }
+    if (!remote && local.current) { const l = local.current; setTimeout(async () => { await openSeal({ commitment: seal.commitment, value: l.value, salt: hex(l.salt) }); setPhase("reveal"); play("chip", 0.6); }, 1200); }
   });
   useEffect(() => {
     if (phase !== "reveal") return;

@@ -8,6 +8,7 @@ import { ChipRack } from "@/components/ChipRack";
 import { HouseFair } from "@/components/HouseFair";
 import { useSeat } from "@/lib/house";
 import { WHEEL_ORDER, RED, colorOf } from "@/lib/roulette";
+import { celebrate, flyChips } from "@/lib/motion";
 import { play, ballRoll } from "@/lib/sfx";
 
 const payout = (k: BetKey, n: number): number => {
@@ -30,7 +31,7 @@ export default function Roulette() {
   const wheelRot = useRef(0);
   const [chip, setChip] = useState(0.01);
   const [bets, setBets] = useState<Record<BetKey, number[]>>({ "n:17": [0.01, 0.01], red: [0.05], "doz:2": [0.005] });
-  const [history, setHistory] = useState<number[]>([32, 0, 17, 5, 26, 11, 30, 8, 19, 3]);
+  const [history, setHistory] = useState<number[]>([]);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<{ n: number; win: number } | null>(null);
   const seat = useSeat();
@@ -39,7 +40,8 @@ export default function Roulette() {
   const { contextSafe } = useGSAP({ scope });
 
   const total = Object.values(bets).flat().reduce((a, b) => a + b, 0);
-  const place = (k: BetKey) => { if (spinning) return; play("chip"); setResult(null); setBets(b => ({ ...b, [k]: [...(b[k] ?? []), chip] })); };
+  const place = (k: BetKey) => { if (spinning) return; play("chip");
+    flyChips([chip], scope.current?.querySelector(".rack .on"), document.activeElement?.closest(".lcell") ?? null, { sound: false }); setResult(null); setBets(b => ({ ...b, [k]: [...(b[k] ?? []), chip] })); };
 
   const spin = contextSafe(async () => {
     if (spinning || total === 0 || !seat.ready) return;
@@ -61,11 +63,15 @@ export default function Roulette() {
     const tl = gsap.timeline({ onComplete: () => {
       const win = Object.entries(bets).reduce((a, [k, v]) => a + payout(k, n) * v.reduce((x, y) => x + y, 0), 0);
       setResult({ n, win }); setHistory(h => [n, ...h].slice(0, 14)); setSpinning(false); setVerifiable(h => [{ nonce: r.nonce, outcome: n, seed: commitment }, ...h].slice(0, 20));
-      play(win > 0 ? "stack" : "collide", 0.6);
+      if (win > 0) celebrate(win, scope.current?.querySelector(".roulette-felt")); else play("collide", 0.5);
     } });
     tl.to(wheel.current, { rotation: w1, svgOrigin: "0 0", duration: dur, ease: "power3.out" }, 0)
       .to(orbit.current, { rotation: ballEnd - 360 * Math.floor(w0 / 360) * 0, svgOrigin: "0 0", duration: dur, ease: "power3.out" }, 0)
-      .to(ball.current, { attr: { cy: -126 }, duration: 1.1, ease: "bounce.out" }, dur - 2.3)
+      // The ball leaves the track, clatters over the frets (a few decaying hops that knock it a pocket or two
+      // sideways) and settles. The scatter is on the ball itself and returns to 0, so the final pocket is exact.
+      .to(ball.current, { keyframes: { attr: [{ cy: -165 }, { cy: -128 }, { cy: -142 }, { cy: -127 }, { cy: -134 }, { cy: -126 }, { cy: -129 }, { cy: -126 }], easeEach: "sine.inOut" }, duration: 1.6, ease: "power1.out" }, dur - 2.5)
+      .to(ball.current, { keyframes: { rotation: [0, 11, -7, 4, -2, 0] }, svgOrigin: "0 0", duration: 1.6, ease: "power2.out" }, dur - 2.5)
+      .call(() => play("chip", 0.18), [], dur - 2.2).call(() => play("chip", 0.12), [], dur - 1.8).call(() => play("chip", 0.08), [], dur - 1.45)
       .to(orbit.current, { rotation: w1 + idx * POCKET_STEP, svgOrigin: "0 0", duration: 0.01 }, dur);
   });
 

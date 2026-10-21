@@ -10,6 +10,7 @@ import { getClient, serverState, SESSION_KEY, KEEP_KEY } from "@/lib/server";
 import { isMuted, setMuted } from "@/lib/sfx";
 
 import { GAMES } from "@/lib/games";
+import { installMotion } from "@/lib/motion";
 const NAV = [["Lobby", "/"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
 const PVP = GAMES.filter(g => g.kind.startsWith("Player")), HOUSE = GAMES.filter(g => !PVP.includes(g));
 
@@ -60,7 +61,7 @@ function MobileMenu({ path }: { path: string }) {
 
 export function Header() {
   const live = useSyncExternalStore(serverState.subscribe, serverState.get, serverState.server);
-  useEffect(() => { getClient(); }, []);
+  useEffect(() => { getClient(); installMotion(); }, []);
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const [muted, setM] = useState(isMuted());

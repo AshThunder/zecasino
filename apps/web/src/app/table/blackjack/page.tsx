@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ChipRack } from "@/components/ChipRack";
@@ -12,6 +11,7 @@ import { useSeat } from "@/lib/house";
 import { localDealer, remoteDealer, record, verifyRecord, type Action, type BjRecord, type Dealer, type HandView } from "@/lib/blackjack";
 import { bjValue, code } from "@/lib/cards";
 import { play } from "@/lib/sfx";
+import { celebrate, dealFromShoe, flyChips } from "@/lib/motion";
 
 type Phase = "bet" | "player" | "dealer" | "done";
 export default function Blackjack() {
@@ -39,10 +39,11 @@ export default function Blackjack() {
     if (open) { seedAtDeal.current = seat.commitment; setBet([open.stake]); setPlayer([]); setDealer([]); setPhase("dealer"); show(open, { hands: [[]], d: 0 }); }
   })(); }, [seat.ready, seat.remote]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const animateLast = contextSafe((sel: string) => {
+  /** Each card leaves the shoe face down and turns over on its spot; the dealer's hole card stays down. */
+  const animateLast = contextSafe((sel: string, flip = true) => {
     requestAnimationFrame(() => {
       const els = scope.current?.querySelectorAll(sel); const el = els?.[els.length - 1]; if (!el) return;
-      gsap.fromTo(el, { x: 380, y: -220, rotation: 25, opacity: 0 }, { x: 0, y: 0, rotation: 0, opacity: 1, duration: 0.45, ease: "power3.out" });
+      dealFromShoe(el, scope.current?.querySelector(".bj-shoe"), { flip });
     });
   });
   /** Animate the table from what it shows now to the server's view, card by card (split hands included). */
@@ -55,7 +56,7 @@ export default function Blackjack() {
     if (from.d === 0 && target[0].length >= 2) {
       const p0 = target.length > 1 ? [target[0][0], target[1][0]] : target[0];
       steps.push(() => { setPhands([[p0[0]]]); setActive(0); animateLast(".hand.player .pcard"); }, () => { setDealer([d[0]]); animateLast(".hand.dealer .pcard"); },
-        () => { setPhands([[p0[0], p0[1]]]); animateLast(".hand.player .pcard"); }, () => { setDealer(v.done ? [d[0], d[1]] : [d[0], -1]); animateLast(".hand.dealer .pcard"); });
+        () => { setPhands([[p0[0], p0[1]]]); animateLast(".hand.player .pcard"); }, () => { setDealer(v.done ? [d[0], d[1]] : [d[0], -1]); animateLast(".hand.dealer .pcard", v.done); });
       cur = [[p0[0], p0[1]]]; from = { ...from, d: 2 };
     }
     if (target.length > cur.length && cur.length === 1 && cur[0].length === 2) { cur = [[cur[0][0]], [cur[0][1]]]; push(cur, 0, false); }
@@ -66,7 +67,8 @@ export default function Blackjack() {
     setTimeout(() => {
       setCaps({ split: v.can_split && !!dealerRef.current?.canSplit, double: v.can_double });
       if (!v.done) { setActive(v.active); setPhase("player"); return; }
-      setPhase("done"); setMsg(v.message); play(v.payout > v.stake ? "stack" : "collide", 0.6);
+      setPhase("done"); setMsg(v.message);
+      if (v.payout > v.stake) celebrate(v.payout, scope.current?.querySelector(".bj-felt"), { label: v.message?.startsWith("Blackjack") ? "Blackjack" : "You win" }); else play(v.payout === v.stake ? "chip" : "collide", 0.6);
       setHands(h => [{ nonce: v.nonce, outcome: record(v), seed: seedAtDeal.current }, ...h].slice(0, 20));
     }, t + 420);
   };
@@ -104,7 +106,7 @@ export default function Blackjack() {
               {h.length > 0 && <span className={`hand-total ${v.total > 21 ? "bust" : ""}`}>{v.soft && v.total <= 21 ? `soft ${v.total}` : v.total}</span>}
             </div>); })}
         </div>
-        <div className="bet-circle" onClick={() => phase === "bet" || phase === "done" ? (setBet(b => [...b, chip]), play("chip")) : null} role="button" aria-label="Betting circle">
+        <div className="bet-circle" onClick={e => { if (phase === "bet" || phase === "done") { setBet(b => [...b, chip]); flyChips([chip], scope.current?.querySelector(".rack .on"), e.currentTarget); play("chip"); } }} role="button" aria-label="Betting circle">
           {bet.length ? <ChipStack values={bet} size={58} /> : <span>BET</span>}
         </div>
         {msg && <div className="result-toast" role="status"><span>{msg}</span></div>}

@@ -528,3 +528,13 @@ body.menu-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .dots::after { animation: none; } }
 .addr-skel { padding: 12px 14px; border-radius: 10px; background: #ffffff08; border: 1px dashed #F4B72844; color: var(--muted); font-size: .84rem; }
 .qr-skel { width: 220px; height: 220px; border-radius: 14px; background: linear-gradient(90deg, #ffffff0a, #ffffff17, #ffffff0a); background-size: 200% 100%; animation: skel 1.4s ease-in-out infinite; }
+
+/* ---------- motion ---------- */
+.fly-chip { position: fixed; left: 0; top: 0; z-index: 200; width: 40px; height: 40px; pointer-events: none; filter: drop-shadow(0 6px 8px #0009); }
+.felt { position: relative; }
+.win-burst { position: absolute; left: 50%; top: 42%; translate: -50% -50%; z-index: 30; display: grid; justify-items: center; gap: 2px; padding: 14px 30px 16px; border-radius: 18px; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 0%, #2a2210f2, #12100bf2); border: 1px solid #F4B72899; box-shadow: 0 0 0 1px #0008, 0 18px 50px #000b, 0 0 60px #F4B72844; }
+.win-burst small { font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: #E9C46A; }
+.win-burst b { font-family: var(--font-display), serif; font-size: 2.2rem; font-weight: 600; color: #FBE7A8; text-shadow: 0 0 18px #F4B72877; font-variant-numeric: tabular-nums; }
+.win-glow-static { box-shadow: inset 0 0 120px 0 #F4B72838, 0 0 48px 4px #F4B72855 !important; }
+@media (max-width: 640px) { .win-burst b { font-size: 1.6rem; } }

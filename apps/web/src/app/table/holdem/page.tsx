@@ -7,6 +7,7 @@ import { CardBack } from "@/components/CardBack";
 import { Chip, ChipStack } from "@/components/Chip";
 import { code } from "@/lib/cards";
 import { best } from "@/lib/poker";
+import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
 import { getClient, toZat, ZAT } from "@/lib/server";
 import { loadMp, mp, type Masked, type Pk, type Share } from "@/lib/mp";
@@ -124,7 +125,8 @@ export default function Holdem() {
           const mineOk = (r.positions as number[]).every((p, i) => mp.unmask(k.current.deck[p], r.shares[p]) === r.cards[i]);
           setOppHole(m.holes[o]); note(mineOk ? "Opponent's hole cards re-opened from their shares: match" : "OPPONENT REVEAL MISMATCH");
         }
-        const won = m.winner === seatRef.current; play(won ? "stack" : "collide", 0.6);
+        const won = m.winner === seatRef.current;
+        if (won) celebrate((m.pot - m.rake) / ZAT, document.querySelector(".poker-felt"), { label: m.by === "showdown" ? "You take the pot" : "Pot is yours" }); else play(m.winner === "split" ? "chip" : "collide", 0.6);
       });
       on("hm_closed", m => { setNotice(m.reason ? `Table closed: ${m.reason}. ⓩ ${z(m.cashed_out)} returned to your balance.` : null); setRoom(null); setSt(null); setHole([]); setBoard([]); setResult(null); });
       on("error", m => setErr(m.error));
@@ -142,6 +144,7 @@ export default function Holdem() {
     const c = await getClient(); setErr(null);
     c?.send({ t: "hm_act", room, action, to: action === "raise" ? raiseTo : undefined });
     play(action === "raise" ? "stack" : action === "fold" ? "slide" : "chip", 0.5);
+    if (action === "call" || action === "raise") flyChips([0.01, 0.005], document.querySelector(".pk-seat.bottom"), document.querySelector(".pk-pot"), { sound: false });
   };
   const leave = async () => { const c = await getClient(); c?.send({ t: "holdem_leave", room }); };
 
@@ -168,7 +171,7 @@ export default function Holdem() {
             </div>
             {resultText
               ? <div className="result-toast inline" role="status"><span>{resultText}{result?.rake ? <small> · rake ⓩ {(result.rake / ZAT).toFixed(4)}</small> : null}</span></div>
-              : <div className="pk-pot"><ChipStack values={[0.01, 0.01, 0.005]} size={40} /><span>Pot ⓩ {z(st?.pot ?? 0)}</span></div>}
+              : <div className="pk-pot"><ChipStack values={st?.pot ? chipsFor(st.pot / ZAT, 5) : []} size={40} /><span>Pot ⓩ {z(st?.pot ?? 0)}</span></div>}
             <div className="felt-mark">ZECASINO</div>
             <div className="pk-seat bottom">
               <div className="pk-hole">{room && (hole.length ? hole : [-1, -1]).map((c, i) => <PlayingCard key={i} code={c >= 0 ? code(c) : "AS"} faceUp={c >= 0} width={84} />)}</div>
