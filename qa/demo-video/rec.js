@@ -108,8 +108,8 @@ const SCENES = {
     await opp.locator(".stake-pick button", { hasText: "0.010" }).click(); await opp.getByRole("button", { name: /^Quick match/ }).click(); mark("matched");
     const vis = async (pg, n) => { const l = pg.getByRole("button", { name: n }); return (await l.count()) > 0 && await l.first().isVisible() && await l.first().isEnabled(); };
     for (let i = 0, bids = 0; i < 80; i++) {
-      if (bids > 1 && await vis(opp, "Liar!")) await opp.getByRole("button", { name: "Liar!" }).click().catch(() => {}); else if (await vis(opp, "Bid")) await opp.getByRole("button", { name: "Bid" }).first().click().catch(() => {});
-      if (await vis(p, "Bid")) { if (bids++ < 2) { await click(p, p.getByRole("button", { name: "Bid" }).first(), 600); } else if (await vis(p, "Liar!")) { await click(p, p.getByRole("button", { name: "Liar!" }), 700); } }
+      if (bids > 0 && await vis(opp, "Liar!")) await opp.getByRole("button", { name: "Liar!" }).click().catch(() => {}); else if (await vis(opp, "Bid")) await opp.getByRole("button", { name: "Bid" }).first().click().catch(() => {});
+      if (await vis(p, "Bid")) { if (bids++ < 1) { await click(p, p.getByRole("button", { name: "Bid" }).first(), 600); } else if (await vis(p, "Liar!")) { await click(p, p.getByRole("button", { name: "Liar!" }), 700); } }
       if (await vis(p, "Rematch")) { mark("over"); break; } await sleep(400);
     }
     await sleep(3500); }; },

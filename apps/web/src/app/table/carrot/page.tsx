@@ -177,7 +177,7 @@ export default function CarrotTable() {
             </>}
             {!waitingRoom && role === "guesser" && phase !== "reveal" && (phase === "decide" && swap === null
               ? <><button className="btn ghost lg" onClick={() => decide(false)}>Keep my box</button><button className="btn gold lg" onClick={() => decide(true)}>Swap boxes</button></>
-              : <span className="wait">{swap === null ? "They're peeking…" : "Opening the boxes…"}</span>)}
+              : <span className="wait">{swap === null ? (oppHouse ? "The house is peeking…" : "They're peeking…") : "Opening the boxes…"}</span>)}
             {phase === "reveal" && <><span className={`outcome ${iWin ? "win" : "lose"}`}>{iWin ? `The carrot is yours. You win ⓩ ${(stake * 2 * 0.98).toFixed(4)}` : "They found the carrot."}</span>{remote ? <><RematchButton room={room} house={oppHouse} /><button className="btn ghost" onClick={reset}>New opponent</button></> : <button className="btn gold" onClick={reset}>Next round</button>}</>}
           </div>
         </div>
@@ -197,7 +197,7 @@ export default function CarrotTable() {
           <dt>Check</dt><dd className="mono">SHA-256(“zecasino:commit:v1”‖len‖salt‖box) {seal.ok ? "equals" : "does not equal"} the commitment</dd>
         </VerifiedRound></div>}
         {houseSeal && <dl className="house-seal">
-          <dt>House decision seal (made before your peek)</dt><dd className="mono">{short(houseSeal.commitment)}</dd>
+          <dt>House decision seal (made at the start of the round)</dt><dd className="mono">{short(houseSeal.commitment)}</dd>
           {houseSeal.ok !== undefined && <><dt>Opened</dt><dd className={`mono ${houseSeal.ok ? "ok" : "bad"}`}>{houseSeal.value === "carrot:house-swap" ? "swap" : "keep"} · {houseSeal.ok ? "matches the seal and what the house did ✓" : "DOES NOT MATCH"}</dd></>}
         </dl>}
         <p className="note">The carrot&apos;s box is sealed as SHA-256(“zecasino:commit:v1”‖len‖salt‖box) before anyone peeks. At reveal the salt opens it and your browser recomputes the hash, so nobody can move the carrot after hearing the bluff.</p>

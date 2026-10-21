@@ -1011,3 +1011,14 @@ dialog.restore > h3, dialog.howto > .eyebrow { padding-right: 44px; }
 .doc-page p, .doc-page li { line-height: 1.65; color: var(--ivory); }
 .doc-page a { color: var(--gold-hi); }
 @media (prefers-reduced-motion: reduce) { .pz-dot { animation: none; } .turn-clock svg circle:last-child, .qm-stake { transition: none; } }
+
+/* Footer project links */
+.ftr { flex-wrap: wrap; align-items: center; }
+.ftr > span { min-width: 0; overflow-wrap: anywhere; }
+.ftr-right { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.ftr-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.ftr-links a { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ivory); text-decoration: none; transition: border-color .15s, color .15s; }
+.ftr-links a:hover, .ftr-links a:focus-visible { border-color: var(--gold); color: var(--gold-hi); outline: none; }
+@media (max-width: 640px) { .ftr { padding: 18px 16px; } .ftr-right { flex-direction: column; align-items: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .ftr-links a { transition: none; } }
+.doc-page { overflow-wrap: anywhere; } .doc-page .house-badge { white-space: normal; }
