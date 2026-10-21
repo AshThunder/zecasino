@@ -22,13 +22,15 @@ pub struct Bet { pub stake: u64, pub auto: Option<u64>, pub out: Option<u64>, pu
 pub struct Crash {
     pub round: u64, pub phase: Phase, seed: [u8; 32], pub commitment: String, bust: u64,
     pub started: Instant, pub bets: HashMap<String, Bet>, pub tx: broadcast::Sender<String>,
+    /// Last busts with their revealed seeds, newest first, so a fresh tab can show (and re-verify) the strip.
+    pub recent: std::collections::VecDeque<serde_json::Value>,
 }
 
 impl Crash {
     /// `first_round` comes from the ledger so round ids continue across restarts.
     pub fn new(first_round: u64) -> Self {
         let (tx, _) = broadcast::channel(256);
-        let mut c = Self { round: first_round.saturating_sub(1), phase: Phase::Busted, seed: [0; 32], commitment: String::new(), bust: 100, started: Instant::now(), bets: HashMap::new(), tx };
+        let mut c = Self { round: first_round.saturating_sub(1), phase: Phase::Busted, seed: [0; 32], commitment: String::new(), bust: 100, started: Instant::now(), bets: HashMap::new(), tx, recent: Default::default() };
         c.next_round();
         c
     }
@@ -44,6 +46,7 @@ impl Crash {
         let elapsed = self.started.elapsed().as_millis() as u64;
         json!({ "t": "crash", "phase": match self.phase { Phase::Betting => "betting", Phase::Running => "running", Phase::Busted => "busted" },
             "round": self.round, "commitment": self.commitment, "elapsed_ms": elapsed, "bet_ms": BET_MS,
+            "recent": self.recent,
             "bettors": self.bets.values().map(|b| json!({ "anon": b.anon, "stake": b.stake, "out": b.out })).collect::<Vec<_>>() })
     }
     /// Current multiplier (hundredths) while running, capped at the bust point.
@@ -82,7 +85,9 @@ pub async fn run(app: Arc<App>) {
         }
         let mut c = app.crash.lock().await;
         c.phase = Phase::Busted;
-        let _ = c.tx.send(json!({ "t": "crash_bust", "round": c.round, "bust": c.bust, "server_seed": hex::encode(c.seed), "commitment": c.commitment, "client_seed": CRASH_CLIENT_SEED }).to_string());
+        let b = json!({ "t": "crash_bust", "round": c.round, "bust": c.bust, "server_seed": hex::encode(c.seed), "commitment": c.commitment, "client_seed": CRASH_CLIENT_SEED });
+        c.recent.push_front(b.clone()); c.recent.truncate(20);
+        let _ = c.tx.send(b.to_string());
         let round = c.round; drop(c);
         app.ledger.lock().await.crash_close_round(round);
         tokio::time::sleep(Duration::from_millis(3_000)).await;
