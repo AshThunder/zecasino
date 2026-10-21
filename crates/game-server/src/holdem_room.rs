@@ -1,10 +1,10 @@
 //! Hold'em rooms over the websocket: matchmaking, the mental-poker protocol steps, betting, showdown.
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::{Arc, atomic::Ordering}, time::Duration};
 use serde_json::{json, Value};
 use zecasino_mental_poker as mp;
 use crate::{holdem::{self, Act, Hand, Phase, Step, BB, HOUSE}, pvp::{self, Player}, App};
 
-pub struct Room { pub id: String, pub players: [Player; 2], pub stacks: [u64; 2], pub button: usize, pub hand: Option<Hand>, pub hand_no: u64, pub closed: bool }
+pub struct Room { pub id: String, pub players: [Player; 2], pub stacks: [u64; 2], pub button: usize, pub hand: Option<Hand>, pub hand_no: u64, pub closed: bool, pub progress: u64 }
 
 fn hexpt(p: &curve25519_dalek::ristretto::RistrettoPoint) -> String { hex::encode(p.compress().as_bytes()) }
 
@@ -14,9 +14,10 @@ impl App {
 
     pub(crate) async fn hm_new_room(self: &Arc<Self>, a: Player, b: Player, buy_in: u64) {
         let id = crate::rid();
-        let room = Room { id: id.clone(), players: [a, b], stacks: [buy_in; 2], button: 0, hand: None, hand_no: 0, closed: false };
+        let room = Room { id: id.clone(), players: [a, b], stacks: [buy_in; 2], button: 0, hand: None, hand_no: 0, closed: false, progress: 0 };
         for s in 0..2 { self.to_seat(&room, s, json!({ "t": "hm_seated", "room": id, "seat": s, "you": room.players[s].anon, "opponent": room.players[1 - s].anon, "stacks": room.stacks, "blinds": [holdem::SB, BB] })).await; }
         self.holdems.lock().await.insert(id.clone(), room);
+        tokio::spawn(self.clone().hm_watchdog(id.clone()));
         self.hm_start_hand(&id).await;
     }
 
@@ -25,6 +26,7 @@ impl App {
         let Some(r) = rooms.get_mut(id) else { return };
         if r.closed { return; }
         if r.stacks.iter().any(|&s| s < BB) { drop(rooms); self.hm_close(id, "a player is out of chips").await; return; }
+        r.progress += 1;
         r.hand_no += 1; if r.hand_no > 1 { r.button = 1 - r.button; }
         r.hand = Some(Hand::new(r.hand_no, r.stacks, r.button));
         let v = json!({ "t": "hm_hand", "room": id, "hand": r.hand_no, "button": r.button, "stacks": r.stacks });
@@ -35,10 +37,10 @@ impl App {
     pub(crate) async fn hm_close(self: &Arc<Self>, id: &str, why: &str) {
         let Some(mut r) = self.holdems.lock().await.remove(id) else { return };
         r.closed = true;
-        // A hand in progress is abandoned: refund what each player put in this hand.
-        let back = r.hand.as_ref().filter(|h| h.phase != Phase::Done).map(|h| h.betting.contrib).unwrap_or([0, 0]);
+        // Room stacks only change when a hand settles, so an abandoned hand is refunded by
+        // paying out the stacks as they stood when it started (blinds and bets included).
         for s in 0..2 {
-            let amt = r.stacks[s] + back[s];
+            let amt = r.stacks[s];
             let bal = if amt > 0 { self.ledger.lock().await.apply(&r.players[s].token, amt as i64, "payout", &format!("holdem#{id}")).ok() } else { self.ledger.lock().await.balance(&r.players[s].token).ok() };
             self.to_seat(&r, s, json!({ "t": "hm_closed", "room": id, "reason": why, "cashed_out": amt, "balance": bal })).await;
         }
@@ -49,7 +51,10 @@ impl App {
         json!({ "t": "hm_state", "room": r.id, "street": b.street, "pot": b.pot(), "street_bet": b.street_bet, "stacks": b.stacks, "to_act": b.to_act,
             "legal": (b.to_act == seat && h.phase == Phase::Betting).then(|| b.legal(seat)), "board": h.board, "log": h.log })
     }
-    async fn send_state(&self, r: &Room) { if let Some(h) = &r.hand { for s in 0..2 { self.to_seat(r, s, Self::state_msg(r, h, s)).await; } } }
+    async fn send_state(&self, r: &Room) {
+        let act = self.hm_act_ms.load(Ordering::Relaxed);
+        if let Some(h) = &r.hand { for s in 0..2 { let mut m = Self::state_msg(r, h, s); m["act_ms"] = json!(act); self.to_seat(r, s, m).await; } }
+    }
 
     /// Ask both players for their shares of `positions` (each player is asked only for positions it may reveal).
     async fn request_shares(&self, r: &mut Room, req: [Vec<usize>; 2]) {
@@ -58,7 +63,63 @@ impl App {
         for (s, p) in req.iter().enumerate() { if !p.is_empty() { self.to_seat(r, s, json!({ "t": "hm_share_req", "room": r.id, "positions": p })).await; } }
     }
 
+    /// Accepted messages reset the stall clock; rejected ones do not, so spamming cannot stall a table.
     pub(crate) async fn hm_message(self: &Arc<Self>, tok: &str, t: &str, v: &Value) -> Result<(), &'static str> {
+        self.hm_message_inner(tok, t, v).await?;
+        if let Some(r) = self.holdems.lock().await.get_mut(v["room"].as_str().unwrap_or("")) { r.progress += 1; }
+        Ok(())
+    }
+
+    /// Who the table is waiting on, and how long they get.
+    fn hm_waiting(&self, r: &Room) -> Option<(Vec<usize>, u64)> {
+        let h = r.hand.as_ref()?;
+        let proto = self.hm_proto_ms.load(Ordering::Relaxed); let act = self.hm_act_ms.load(Ordering::Relaxed);
+        match h.phase {
+            Phase::Keys => Some(((0..2).filter(|&s| h.pks[s].is_none()).collect(), proto)),
+            Phase::Shuffle(s) => Some((vec![s], proto)),
+            Phase::HoleShares | Phase::Board | Phase::Showdown => Some((h.pending.iter().map(|p| p.0).collect(), proto)),
+            Phase::Betting => Some((vec![h.betting.to_act], act)),
+            Phase::Done => None,
+        }
+    }
+
+    /// Stall handling. Betting: the player to act is checked if that is free, else folded.
+    /// Before any betting (keys, shuffles, hole shares) the table closes and every chip is refunded.
+    /// Withholding board or showdown shares forfeits the pot, so hiding a losing hand never pays.
+    async fn hm_watchdog(self: Arc<Self>, id: String) {
+        let mut seen = (u64::MAX, std::time::Instant::now());
+        loop {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            let mut rooms = self.holdems.lock().await;
+            let Some(r) = rooms.get_mut(&id) else { return };
+            if r.progress != seen.0 { seen = (r.progress, std::time::Instant::now()); continue; }
+            let Some((who, limit)) = self.hm_waiting(r) else { continue };
+            if who.is_empty() || seen.1.elapsed() < Duration::from_millis(limit) { continue; }
+            let h = r.hand.as_mut().unwrap();
+            let stalled = who[0];
+            let name = r.players[stalled].anon.clone();
+            r.progress += 1;
+            match h.phase {
+                Phase::Betting => {
+                    let check = h.betting.legal(stalled)["check"].as_bool().unwrap_or(false);
+                    h.log.push(format!("anon · {name} timed out and {}", if check { "checks" } else { "folds" }));
+                    drop(rooms);
+                    let v = json!({ "room": id, "action": if check { "check" } else { "fold" } });
+                    let tok = self.holdems.lock().await.get(&id).map(|r| r.players[stalled].token.clone());
+                    if let Some(tok) = tok { let _ = self.hm_message_inner(&tok, "hm_act", &v).await; }
+                }
+                Phase::Keys | Phase::Shuffle(_) | Phase::HoleShares => { drop(rooms); self.hm_close(&id, &format!("anon · {name} stopped responding; the hand was cancelled and all chips refunded")).await; return; }
+                _ => {
+                    // Board or showdown shares withheld. If both stalled, nobody is rewarded: refund.
+                    if who.len() > 1 { drop(rooms); self.hm_close(&id, "both players stopped responding; chips refunded").await; return; }
+                    h.log.push(format!("anon · {name} withheld card shares and forfeits the hand"));
+                    drop(rooms); self.hm_settle(&id, Some(1 - stalled), "forfeit").await;
+                }
+            }
+        }
+    }
+
+    async fn hm_message_inner(self: &Arc<Self>, tok: &str, t: &str, v: &Value) -> Result<(), &'static str> {
         let id = v["room"].as_str().unwrap_or("").to_owned();
         let mut rooms = self.holdems.lock().await;
         let r = rooms.get_mut(&id).ok_or("no such table")?;
@@ -132,7 +193,7 @@ impl App {
                 h.log.push(match a { Act::Raise => format!("{who} raises to {}", h.betting.street_bet[seat].max(v["to"].as_u64().unwrap_or(0))), _ => format!("{who} {}", serde_json::to_value(a).unwrap().as_str().unwrap()) });
                 match step {
                     Step::Continue => { let r = &*r; self.send_state(r).await; }
-                    Step::Folded { winner } => { drop(rooms); self.hm_settle(&id, Some(winner)).await; }
+                    Step::Folded { winner } => { drop(rooms); self.hm_settle(&id, Some(winner), "fold").await; }
                     Step::StreetDone if street == 3 => { h.phase = Phase::Showdown; self.request_shares(r, [holdem::hole_positions(0).to_vec(), holdem::hole_positions(1).to_vec()]).await; }
                     Step::StreetDone => { h.phase = Phase::Board; let p = holdem::board_positions(h.betting.street).to_vec(); self.request_shares(r, [p.clone(), p]).await; }
                     Step::AllInRunout => {
@@ -176,20 +237,20 @@ impl App {
                     else { h.phase = Phase::Showdown; self.to_both(&*r, msg).await; self.request_shares(r, [holdem::hole_positions(0).to_vec(), holdem::hole_positions(1).to_vec()]).await; }
                 } else { h.phase = Phase::Betting; let r = &*r; self.to_both(r, msg).await; self.send_state(r).await; }
             }
-            Phase::Showdown => { drop(rooms); self.hm_settle(id, None).await; }
+            Phase::Showdown => { drop(rooms); self.hm_settle(id, None, "showdown").await; }
             _ => {}
         }
     }
 
     /// Ends the hand: `folded_winner` for a fold, else a showdown on the opened cards.
-    async fn hm_settle(self: &Arc<Self>, id: &str, folded_winner: Option<usize>) {
+    async fn hm_settle(self: &Arc<Self>, id: &str, folded_winner: Option<usize>, by: &str) {
         let mut rooms = self.holdems.lock().await;
         let Some(r) = rooms.get_mut(id) else { return };
         let h = r.hand.as_mut().unwrap();
         let b = h.betting.clone();
         let saw_flop = !h.board.is_empty();
         let (mut pay, extra) = match folded_winner {
-            Some(w) => { let mut p = [b.stacks[0], b.stacks[1]]; p[w] += b.pot(); (p, json!({ "winner": w, "by": "fold" })) }
+            Some(w) => { let mut p = [b.stacks[0], b.stacks[1]]; p[w] += b.pot(); (p, json!({ "winner": w, "by": by })) }
             None => {
                 let holes: Vec<[u8; 2]> = (0..2).map(|s| { let p = holdem::hole_positions(s); [h.open(p[0]).unwrap(), h.open(p[1]).unwrap()] }).collect();
                 let eval: Vec<(Vec<u8>, &str)> = holes.iter().map(|hc| { let mut c = h.board.clone(); c.extend(hc); holdem::best(&c) }).collect();
@@ -207,6 +268,7 @@ impl App {
         self.to_both(&*r, msg).await;
         drop(rooms);
         let app = self.clone(); let id = id.to_owned();
-        tokio::spawn(async move { tokio::time::sleep(Duration::from_secs(6)).await; app.hm_start_hand(&id).await; });
+        let close = by == "forfeit";
+        tokio::spawn(async move { tokio::time::sleep(Duration::from_secs(6)).await; if close { app.hm_close(&id, "the table closed after a forfeit").await; } else { app.hm_start_hand(&id).await; } });
     }
 }

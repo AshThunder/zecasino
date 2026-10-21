@@ -5,8 +5,11 @@ use zecasino_fairness::{commit::{self, Commitment, Opening}, games, verify_serve
 
 type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
-async fn server() -> String {
+async fn server() -> String { server_with(30_000, 20_000).await }
+async fn server_with(act_ms: u64, proto_ms: u64) -> String {
     let app = zecasino_game_server::App::new(":memory:", true);
+    app.hm_act_ms.store(act_ms, std::sync::atomic::Ordering::Relaxed);
+    app.hm_proto_ms.store(proto_ms, std::sync::atomic::Ordering::Relaxed);
     tokio::spawn(zecasino_game_server::crash::run(app.clone()));
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let a = l.local_addr().unwrap();
@@ -144,13 +147,16 @@ mod holdem_e2e {
     use zecasino_mental_poker as mp;
     use std::collections::HashMap;
 
-    struct Bot { w: Ws, sk: mp::SecretKey, seat: usize, room: String, deck: Vec<mp::Masked>, hole: Vec<u8>, pks: Vec<mp::PublicKey> }
+    struct Bot { w: Ws, sk: mp::SecretKey, seat: usize, room: String, deck: Vec<mp::Masked>, hole: Vec<u8>, pks: Vec<mp::PublicKey>, stall: &'static str }
 
     /// One message-pump step for a bot: handles protocol requests, plays check/call. Returns the message type.
     async fn pump(b: &mut Bot) -> Value {
         let m = loop { if let Message::Text(s) = b.w.next().await.unwrap().unwrap() { break serde_json::from_str::<Value>(&s).unwrap(); } };
         match m["t"].as_str().unwrap() {
             "hm_seated" => { b.seat = m["seat"].as_u64().unwrap() as usize; b.room = m["room"].as_str().unwrap().into(); }
+            "hm_key_req" if b.stall == "key" => {}
+            "hm_share_req" if b.stall == "board" && m["positions"][0].as_u64().unwrap() >= 5 => {}
+            "hm_state" if b.stall == "act" => {}
             "hm_key_req" => { b.sk = mp::SecretKey::generate(); b.hole.clear(); send(&mut b.w, json!({ "t": "hm_key", "room": b.room, "pk": b.sk.public() })).await; }
             "hm_keys" => { b.pks = serde_json::from_value(m["pks"].clone()).unwrap(); }
             "hm_shuffled" => {
@@ -190,6 +196,58 @@ mod holdem_e2e {
         m
     }
 
+    async fn table(url: &str, stall1: &'static str) -> (Bot, Bot) {
+        let (mut a, _) = client(url, 100_000_000).await;
+        let (mut c, _) = client(url, 100_000_000).await;
+        send(&mut a, json!({ "t": "holdem_join", "stake": 40_000_000 })).await; until(&mut a, "queued").await;
+        send(&mut c, json!({ "t": "holdem_join", "stake": 40_000_000 })).await;
+        let mk = |w, stall| Bot { w, sk: mp::SecretKey::generate(), seat: 9, room: String::new(), deck: vec![], hole: vec![], pks: vec![], stall };
+        (mk(a, ""), mk(c, stall1))
+    }
+    /// Pumps both bots until each has seen a message of type `t`; returns bot 0's copy.
+    async fn both_until(b0: &mut Bot, b1: &mut Bot, t: &str) -> (Value, Value) {
+        let (mut r0, mut r1) = (None, None);
+        while r0.is_none() || r1.is_none() {
+            tokio::select! {
+                m = pump(b0) => if m["t"] == t && r0.is_none() { r0 = Some(m); },
+                m = pump(b1) => if m["t"] == t && r1.is_none() { r1 = Some(m); },
+            }
+        }
+        (r0.unwrap(), r1.unwrap())
+    }
+
+    #[tokio::test]
+    async fn stalled_action_auto_folds() {
+        let url = server_with(1_500, 20_000).await;
+        let (mut b0, mut b1) = table(&url, "act").await;
+        let (r, _) = both_until(&mut b0, &mut b1, "hm_result").await;
+        // Hand 1: seat 0 is the button / small blind and acts first, so the stalled bot is seat 1 (BB)
+        // facing nothing to call → checks; the stall must still finish the hand without the bot.
+        assert!(r["log"].as_array().unwrap().iter().any(|l| l.as_str().unwrap().contains("timed out")), "{r}");
+        let stacks: Vec<u64> = serde_json::from_value(r["stacks"].clone()).unwrap();
+        assert_eq!(stacks[0] + stacks[1] + r["rake"].as_u64().unwrap(), 80_000_000);
+    }
+
+    #[tokio::test]
+    async fn withheld_board_shares_forfeit() {
+        let url = server_with(30_000, 1_500).await;
+        let (mut b0, mut b1) = table(&url, "board").await;
+        let (r, _) = both_until(&mut b0, &mut b1, "hm_result").await;
+        assert_eq!(r["by"], "forfeit");
+        assert_eq!(r["winner"].as_u64().unwrap() as usize, b0.seat);
+        let (c, _) = both_until(&mut b0, &mut b1, "hm_closed").await;
+        assert_eq!(c["cashed_out"].as_u64().unwrap(), 40_000_000 + 1_000_000);
+    }
+
+    #[tokio::test]
+    async fn stalled_keys_refund() {
+        let url = server_with(30_000, 1_500).await;
+        let (mut b0, mut b1) = table(&url, "key").await;
+        let (c0, c1) = both_until(&mut b0, &mut b1, "hm_closed").await;
+        assert_eq!(c0["cashed_out"], 40_000_000); assert_eq!(c1["cashed_out"], 40_000_000);
+        assert!(c0["reason"].as_str().unwrap().contains("stopped responding"));
+    }
+
     #[tokio::test]
     async fn heads_up_hand_to_showdown() {
         let url = server().await;
@@ -197,7 +255,7 @@ mod holdem_e2e {
         let (mut c, _) = client(&url, 100_000_000).await;
         send(&mut a, json!({ "t": "holdem_join", "stake": 40_000_000 })).await; until(&mut a, "queued").await;
         send(&mut c, json!({ "t": "holdem_join", "stake": 40_000_000 })).await;
-        let mk = |w| Bot { w, sk: mp::SecretKey::generate(), seat: 9, room: String::new(), deck: vec![], hole: vec![], pks: vec![] };
+        let mk = |w| Bot { w, sk: mp::SecretKey::generate(), seat: 9, room: String::new(), deck: vec![], hole: vec![], pks: vec![], stall: "" };
         let (mut b0, mut b1) = (mk(a), mk(c));
         let mut results = vec![];
         while results.len() < 2 {

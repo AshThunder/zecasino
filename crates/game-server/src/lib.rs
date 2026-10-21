@@ -40,6 +40,9 @@ pub struct App {
     holdem_wait: Mutex<Vec<Waiting>>,
     pub(crate) holdems: Mutex<HashMap<String, holdem_room::Room>>,
     pub solvency: Mutex<Option<solvency::Snapshot>>,
+    /// Hold'em stall limits in ms: betting action, and protocol steps (keys, shuffles, shares).
+    pub hm_act_ms: std::sync::atomic::AtomicU64,
+    pub hm_proto_ms: std::sync::atomic::AtomicU64,
     pub dev_credit: bool,
     pub zec: Option<cashier::Zec>,
 }
@@ -54,7 +57,7 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(Ledger::open(db).expect("ledger")), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new()), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), dev_credit, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), hm_act_ms: 30_000.into(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
