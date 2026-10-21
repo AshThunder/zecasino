@@ -432,3 +432,4 @@ html:has(.cashier[open]) { overflow: hidden; }
 .lp-lobby { display: grid; justify-items: center; gap: 8px; margin: 10px 0 18px; }
 .lp-lobby small { color: #CFE5D8aa; font-size: .78rem; }
 .lp-tag em.bad { color: #FF6B6B; }
+.mp-steps li.bad .mp-n { background: #A8161F; }
