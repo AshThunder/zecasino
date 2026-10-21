@@ -4043,6 +4043,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "curve25519-dalek",
  "futures",
  "hex",
  "rand 0.8.8",
@@ -4057,6 +4058,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zecasino-fairness",
+ "zecasino-mental-poker",
 ]
 
 [[package]]

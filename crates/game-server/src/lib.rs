@@ -3,6 +3,8 @@
 //! players only ever see a short per-room `anon` tag.
 pub mod cashier;
 pub mod crash;
+pub mod holdem;
+mod holdem_room;
 pub mod house;
 pub mod ledger;
 pub mod pvp;
@@ -34,11 +36,13 @@ pub struct App {
     carrots: Mutex<HashMap<String, Carrot>>,
     liars_wait: Mutex<Vec<Waiting>>,
     liars: Mutex<HashMap<String, Liars>>,
+    holdem_wait: Mutex<Vec<Waiting>>,
+    pub(crate) holdems: Mutex<HashMap<String, holdem_room::Room>>,
     pub dev_credit: bool,
     pub zec: Option<cashier::Zec>,
 }
 
-fn rid() -> String { let mut b = [0u8; 8]; rand::rngs::OsRng.fill_bytes(&mut b); hex::encode(b) }
+pub(crate) fn rid() -> String { let mut b = [0u8; 8]; rand::rngs::OsRng.fill_bytes(&mut b); hex::encode(b) }
 fn anon() -> String { let mut b = [0u8; 2]; rand::rngs::OsRng.fill_bytes(&mut b); hex::encode(b) }
 fn err(id: &Value, msg: &str) -> Value { json!({ "t": "error", "id": id, "error": msg }) }
 fn lerr(e: LedgerError) -> &'static str { match e { LedgerError::Insufficient => "insufficient balance", LedgerError::UnknownSession => "unknown session" } }
@@ -48,7 +52,7 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(Ledger::open(db).expect("ledger")), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new()), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), dev_credit, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
@@ -116,7 +120,7 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
     }
     if let Some(h) = crash_sub { h.abort(); }
     if let Some(tok) = token { if let Some(l) = app.conns.lock().await.get_mut(&tok) { l.retain(|x| !x.same_channel(&tx)); } 
-        app.carrot_wait.lock().await.retain(|w| w.player.token != tok); app.liars_wait.lock().await.retain(|w| w.player.token != tok); }
+        app.carrot_wait.lock().await.retain(|w| w.player.token != tok); app.liars_wait.lock().await.retain(|w| w.player.token != tok); app.holdem_wait.lock().await.retain(|w| w.player.token != tok); }
     writer.abort();
 }
 
@@ -323,6 +327,23 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             }
             return Ok(None);
         }
+        "holdem_join" => {
+            if !(20 * holdem::BB..=MAX_STAKE).contains(&stake) { return Err("buy-in must be 0.2 to 0.5 TAZ"); }
+            let me = Player { token: tok.to_owned(), anon: anon() };
+            let mut q = app.holdem_wait.lock().await;
+            if q.iter().any(|w| w.player.token == tok) { return Err("already queued"); }
+            if let Some(i) = q.iter().position(|w| w.stake == stake) {
+                let other = q.remove(i); drop(q);
+                app.debit(tok, stake, "holdem-buyin").await?;
+                if app.debit(&other.player.token, stake, "holdem-buyin").await.is_err() { app.credit(tok, stake, "holdem-refund").await; return Err("opponent left"); }
+                app.hm_new_room(other.player, me, stake).await;
+                return Ok(None);
+            }
+            app.debit(tok, stake, "holdem-hold").await?; app.credit(tok, stake, "holdem-hold").await;
+            q.push(Waiting { player: me, stake });
+            json!({ "t": "queued", "id": id, "game": "holdem" })
+        }
+        "hm_key" | "hm_shuffle" | "hm_shares" | "hm_act" | "holdem_leave" => { app.hm_message(tok, t, v).await?; return Ok(None); }
         _ => return Err("unknown message"),
     }))
 }

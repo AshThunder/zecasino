@@ -132,3 +132,87 @@ async fn crash_round_settles_and_reveals() {
     let b = bust["bust"].as_u64().unwrap();
     assert_eq!(bal, if b > 101 { 1_000_000 - 100_000 + 101_000 } else { 900_000 });
 }
+
+mod holdem_e2e {
+    use super::*;
+    use zecasino_mental_poker as mp;
+    use std::collections::HashMap;
+
+    struct Bot { w: Ws, sk: mp::SecretKey, seat: usize, room: String, deck: Vec<mp::Masked>, hole: Vec<u8>, pks: Vec<mp::PublicKey> }
+
+    /// One message-pump step for a bot: handles protocol requests, plays check/call. Returns the message type.
+    async fn pump(b: &mut Bot) -> Value {
+        let m = loop { if let Message::Text(s) = b.w.next().await.unwrap().unwrap() { break serde_json::from_str::<Value>(&s).unwrap(); } };
+        match m["t"].as_str().unwrap() {
+            "hm_seated" => { b.seat = m["seat"].as_u64().unwrap() as usize; b.room = m["room"].as_str().unwrap().into(); }
+            "hm_key_req" => { b.sk = mp::SecretKey::generate(); b.hole.clear(); send(&mut b.w, json!({ "t": "hm_key", "room": b.room, "pk": b.sk.public() })).await; }
+            "hm_keys" => { b.pks = serde_json::from_value(m["pks"].clone()).unwrap(); }
+            "hm_shuffled" => {
+                // Every browser can check every shuffle it did not make.
+                let i: Vec<mp::Masked> = serde_json::from_value(m["input"].clone()).unwrap();
+                let o: Vec<mp::Masked> = serde_json::from_value(m["output"].clone()).unwrap();
+                let pf: mp::ShuffleProof = serde_json::from_value(m["proof"].clone()).unwrap();
+                let joint = mp::joint_key(&b.pks).unwrap();
+                mp::verify_shuffle(&i, &o, &joint, &pf).expect("forwarded shuffle verifies");
+            }
+            "hm_shuffle_req" => {
+                let d: Vec<mp::Masked> = serde_json::from_value(m["deck"].clone()).unwrap();
+                let (o, pf) = mp::shuffle(&d, &mp::joint_key(&b.pks).unwrap());
+                send(&mut b.w, json!({ "t": "hm_shuffle", "room": b.room, "deck": o, "proof": pf })).await;
+            }
+            "hm_deck" => { b.deck = serde_json::from_value(m["deck"].clone()).unwrap(); }
+            "hm_share_req" => {
+                let shares: HashMap<String, mp::Share> = m["positions"].as_array().unwrap().iter().map(|p| { let p = p.as_u64().unwrap() as usize; (p.to_string(), b.sk.share(&b.deck[p])) }).collect();
+                send(&mut b.w, json!({ "t": "hm_shares", "room": b.room, "shares": shares })).await;
+            }
+            "hm_hole" => {
+                for p in m["positions"].as_array().unwrap() {
+                    let p = p.as_u64().unwrap() as usize;
+                    let mut sh: Vec<mp::Share> = serde_json::from_value(m["shares"][p.to_string()].clone()).unwrap();
+                    assert_eq!(sh.len(), 2);
+                    sh.push(b.sk.share(&b.deck[p]));
+                    b.hole.push(mp::unmask(&b.deck[p], &sh).unwrap() as u8);
+                }
+            }
+            "hm_state" => if let Some(l) = m.get("legal").filter(|l| !l.is_null()) {
+                let a = if l["check"].as_bool().unwrap() { "check" } else { "call" };
+                send(&mut b.w, json!({ "t": "hm_act", "room": b.room, "action": a })).await;
+            },
+            "error" => panic!("{m}"),
+            _ => {}
+        }
+        m
+    }
+
+    #[tokio::test]
+    async fn heads_up_hand_to_showdown() {
+        let url = server().await;
+        let (mut a, _) = client(&url, 100_000_000).await;
+        let (mut c, _) = client(&url, 100_000_000).await;
+        send(&mut a, json!({ "t": "holdem_join", "stake": 40_000_000 })).await; until(&mut a, "queued").await;
+        send(&mut c, json!({ "t": "holdem_join", "stake": 40_000_000 })).await;
+        let mk = |w| Bot { w, sk: mp::SecretKey::generate(), seat: 9, room: String::new(), deck: vec![], hole: vec![], pks: vec![] };
+        let (mut b0, mut b1) = (mk(a), mk(c));
+        let mut results = vec![];
+        while results.len() < 2 {
+            tokio::select! {
+                m = pump(&mut b0) => if m["t"] == "hm_result" { results.push((0, m)); },
+                m = pump(&mut b1) => if m["t"] == "hm_result" { results.push((1, m)); },
+            }
+        }
+        let r = &results[0].1;
+        assert_eq!(r["by"], "showdown");
+        assert_eq!(r["board"].as_array().unwrap().len(), 5);
+        // The hole cards each browser decrypted privately are the ones revealed at showdown.
+        let holes: Vec<Vec<u8>> = serde_json::from_value(r["holes"].clone()).unwrap();
+        for b in [&b0, &b1] { assert_eq!(holes[b.seat], b.hole, "seat {}", b.seat); }
+        let mut all: Vec<u8> = holes.concat(); all.extend(serde_json::from_value::<Vec<u8>>(r["board"].clone()).unwrap());
+        all.sort(); all.dedup(); assert_eq!(all.len(), 9, "no duplicate cards");
+        let stacks: Vec<u64> = serde_json::from_value(r["stacks"].clone()).unwrap();
+        assert_eq!(stacks[0] + stacks[1] + r["rake"].as_u64().unwrap(), 80_000_000);
+        // Leave after the hand: chips go back to the ledger.
+        send(&mut b0.w, json!({ "t": "holdem_leave", "room": b0.room })).await;
+        let closed = loop { let m = pump(&mut b0).await; if m["t"] == "hm_closed" { break m; } };
+        assert_eq!(closed["cashed_out"].as_u64().unwrap(), stacks[b0.seat]);
+    }
+}

@@ -7,6 +7,8 @@ description = "Zecasino websocket game server: sessions, ledger, house games and
 
 [dependencies]
 zecasino-fairness = { path = "../fairness" }
+zecasino-mental-poker = { path = "../mental-poker" }
+curve25519-dalek = "4"
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
@@ -24,3 +26,5 @@ anyhow = "1"
 
 [dev-dependencies]
 tokio-tungstenite = "0.26"
+zecasino-mental-poker = { path = "../mental-poker" }
+curve25519-dalek = "4"
