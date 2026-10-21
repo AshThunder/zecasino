@@ -1,5 +1,5 @@
 FROM node:22-bookworm-slim AS build
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /web
 COPY apps/web/package.json apps/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -10,7 +10,7 @@ ENV NEXT_PUBLIC_GAME_WS=$NEXT_PUBLIC_GAME_WS NEXT_PUBLIC_DEMO_WS=$NEXT_PUBLIC_DE
 RUN pnpm build
 
 FROM node:22-bookworm-slim
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /web
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /web ./

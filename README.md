@@ -6,7 +6,7 @@ A private casino on Zcash testnet: shielded deposits in, shielded withdrawals ou
 
 ZECATHON 2026, Wildcard track. Testnet only (TAZ). *Not affiliated with ZKasino.*
 
-**Live demo:** _coming soon_ · **Demo video:** _coming soon_
+**Live demo:** https://zecasino.fly.dev · **Demo video:** _coming soon_
 
 ![Lobby](screenshots/after/lobby-desktop.png)
 
