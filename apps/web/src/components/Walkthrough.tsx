@@ -1,4 +1,5 @@
 "use client";
+import { CloseX, backdropClose } from "./CloseX";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { gsap } from "gsap";
@@ -73,10 +74,12 @@ export function Walkthrough({ onClose }: { onClose: () => void }) {
     }, root);
     return () => ctx.revert();
   }, [still]);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
   const replay = () => { setDone(false); tl.current?.restart(); };
   return createPortal(
-    <div className="wt-backdrop" role="dialog" aria-modal="true" aria-label="How Zecasino works">
+    <div className="wt-backdrop" role="dialog" aria-modal="true" aria-label="How Zecasino works" onClick={backdropClose(onClose)}>
       <div ref={root} className="wt">
+        <CloseX onClick={onClose} />
         <div className="wt-top"><p className="eyebrow">How it works · 20 seconds</p><button className="btn ghost sm wt-skip" onClick={onClose}>{done || still ? "Close" : "Skip"}</button></div>
         {still ? (
           <ol className="wt-board">{STEPS.map((s, i) => <li key={s.k}><span className="mono">{i + 1}</span><h3>{s.k}</h3><p>{s.t}</p></li>)}</ol>

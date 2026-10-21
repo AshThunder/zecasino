@@ -1,4 +1,5 @@
 "use client";
+import { CloseX, backdropClose } from "./CloseX";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { reducedMotion } from "@/lib/motion";
@@ -55,7 +56,8 @@ export function HowTo({ game }: { game: keyof typeof G }) {
   const close = () => { try { localStorage.setItem(KEY(game), "1"); } catch {} setOpen(false); };
   return (<>
     <button className="howto-btn" onClick={() => setOpen(true)} aria-label={`How to play ${g.title}`} title="How to play">?</button>
-    <dialog ref={ref} className="howto" onClose={close} aria-labelledby={`ht-${game}`} {...{ closedby: "any" }}>
+    <dialog ref={ref} className="howto" onClose={close} onClick={backdropClose(close)} aria-labelledby={`ht-${game}`} {...{ closedby: "any" }}>
+      <CloseX onClick={close} />
       <p className="eyebrow">How to play</p>
       <h2 id={`ht-${game}`}>{g.title}</h2>
       <ol>{g.steps.map(([h, t], i) => <li key={h} className="ht-step"><span className="ht-n">{i + 1}</span><div><b>{h}</b><p>{t}</p></div></li>)}</ol>

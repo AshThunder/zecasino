@@ -1,4 +1,5 @@
 "use client";
+import { CloseX } from "./CloseX";
 import { Toaster } from "./Toaster";
 import { RecoveryCard, RestoreDialog } from "./Recovery";
 import { toast } from "@/lib/toast";
@@ -115,6 +116,7 @@ function SessionKey({ onClose }: { onClose: () => void }) {
   const [tok, setTok] = useState(""); const [show, setShow] = useState(false); const [keep, setKeep] = useState(false); const [paste, setPaste] = useState("");
   useEffect(() => { setTok(sessionStorage.getItem(SESSION_KEY) ?? ""); setKeep(!!localStorage.getItem(KEEP_KEY)); }, []);
   const remember = (on: boolean) => { setKeep(on); if (on) localStorage.setItem(KEEP_KEY, tok); else localStorage.removeItem(KEEP_KEY); };
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
   const restore = () => { const k = paste.trim(); if (!/^[0-9a-f]{64}$/.test(k)) return; sessionStorage.setItem(SESSION_KEY, k); if (keep) localStorage.setItem(KEEP_KEY, k); location.reload(); };
   return (
     <div className="session-key" role="dialog" aria-label="Session key">
@@ -127,7 +129,7 @@ function SessionKey({ onClose }: { onClose: () => void }) {
       <div className="sk-row"><input id="sk-restore" className="mono" placeholder="Paste a saved key to restore" value={paste} onChange={e => setPaste(e.target.value)} spellCheck={false} />
         <button className="btn gold sm" onClick={restore} disabled={!/^[0-9a-f]{64}$/.test(paste.trim())}>Restore</button></div>
       <RecoveryCard compact />
-      <button className="sk-close" onClick={onClose} aria-label="Close">×</button>
+      <CloseX onClick={onClose} />
     </div>
   );
 }

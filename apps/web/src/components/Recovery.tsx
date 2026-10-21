@@ -1,4 +1,5 @@
 "use client";
+import { CloseX, backdropClose } from "./CloseX";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { adopt, backupBlob, currentToken, download, fromCode, isSaved, markSaved, readBackup, toCode } from "@/lib/recovery";
@@ -47,7 +48,8 @@ export function RestoreDialog({ onClose }: { onClose: () => void }) {
     adopt(token, keep);
   };
   return createPortal(
-    <dialog ref={ref} className="restore" onClose={onClose} aria-labelledby="rs-h">
+    <dialog ref={ref} className="restore" onClose={onClose} onClick={backdropClose(() => ref.current?.close())} {...{ closedby: "any" }} aria-labelledby="rs-h">
+      <CloseX onClick={() => ref.current?.close()} />
       <h3 id="rs-h">Restore a session</h3>
       <p>Paste your recovery code or open your backup file. This browser switches to that balance; the current session stays on the server, so save its code first if it holds funds.</p>
       <label className="rs-field"><small>Recovery code</small><textarea className="mono" rows={2} value={code} onChange={e => { setCode(e.target.value); setFile(null); setErr(null); }} placeholder={DEMO ? "PLAY-XXXX-XXXX-…" : "ZEC-XXXX-XXXX-…"} spellCheck={false} autoCapitalize="characters" /></label>

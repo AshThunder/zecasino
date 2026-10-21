@@ -1,4 +1,5 @@
 "use client";
+import { CloseX, backdropClose } from "./CloseX";
 import { RecoveryCard, RestoreDialog, recoverySaved } from "./Recovery";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
@@ -49,14 +50,12 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
 
   const copy = (k: string, v: string) => { navigator.clipboard?.writeText(v); setCopied(k); setTimeout(() => setCopied(""), 1400); };
   return (
-    <dialog ref={ref} className="cashier" onClose={onClose} {...{ closedby: "any" }} aria-labelledby="cashier-title">
+    <dialog ref={ref} className="cashier" onClose={onClose} onClick={backdropClose(() => ref.current?.close())} {...{ closedby: "any" }} aria-labelledby="cashier-title">
+      <CloseX onClick={() => ref.current?.close()} />
       <div className="cashier-head">
         <ZMark size={30} />
         <div><h2 id="cashier-title">Cashier</h2><p>Shielded in, shielded out. No account.</p></div>
         <button className="btn ghost sm restore-entry" onClick={() => setRestore(true)}>Restore session</button>
-        <button className="icon-btn" onClick={onClose} aria-label="Close">
-          <svg width="18" height="18" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" /></svg>
-        </button>
       </div>
       <div className="tabs" role="tablist">
         {(["deposit", "withdraw"] as const).map(t => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "deposit" ? "Deposit" : "Withdraw"}</button>)}
