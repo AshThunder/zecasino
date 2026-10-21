@@ -5,6 +5,7 @@ pub mod cashier;
 pub mod crash;
 pub mod holdem;
 mod holdem_room;
+pub mod solvency;
 pub mod house;
 pub mod ledger;
 pub mod pvp;
@@ -38,6 +39,7 @@ pub struct App {
     liars: Mutex<HashMap<String, Liars>>,
     holdem_wait: Mutex<Vec<Waiting>>,
     pub(crate) holdems: Mutex<HashMap<String, holdem_room::Room>>,
+    pub solvency: Mutex<Option<solvency::Snapshot>>,
     pub dev_credit: bool,
     pub zec: Option<cashier::Zec>,
 }
@@ -52,7 +54,7 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(Ledger::open(db).expect("ledger")), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new()), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), dev_credit, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
@@ -84,9 +86,25 @@ pub fn router(app: Arc<App>) -> Router {
         .with_state(app)
 }
 
+impl App {
+    /// Current liability snapshot, rebuilt at most once per REBUILD_SECS.
+    pub async fn snapshot(&self) -> tokio::sync::MappedMutexGuard<'_, solvency::Snapshot> {
+        let now = cashier::now();
+        let mut g = self.solvency.lock().await;
+        if g.as_ref().map_or(true, |s| now >= s.built_at + solvency::REBUILD_SECS) {
+            let bals = self.ledger.lock().await.balances();
+            let epoch = g.as_ref().map_or(1, |s| s.epoch + 1);
+            *g = Some(solvency::Snapshot::build(epoch, now, &bals));
+        }
+        tokio::sync::MutexGuard::map(g, |s| s.as_mut().unwrap())
+    }
+}
+
 async fn solvency(State(app): State<Arc<App>>) -> Json<Value> {
-    let l = app.ledger.lock().await;
-    Json(json!({ "liabilities_zat": l.liabilities(), "house_pnl_zat": l.house_pnl() }))
+    let (live, pnl) = { let l = app.ledger.lock().await; (l.liabilities(), l.house_pnl()) };
+    let snap = { let s = app.snapshot().await; json!({ "epoch": s.epoch, "built_at": s.built_at, "root": s.root(), "leaves": s.leaves(), "depth": s.depth(), "next_at": s.built_at + solvency::REBUILD_SECS }) };
+    let reserves = match &app.zec { Some(z) => z.status().await.ok(), None => None };
+    Json(json!({ "liabilities_zat": live, "house_pnl_zat": pnl, "snapshot": snap, "reserves": reserves }))
 }
 
 async fn ws(up: WebSocketUpgrade, State(app): State<Arc<App>>) -> impl IntoResponse { up.on_upgrade(move |s| conn(s, app)) }
@@ -152,6 +170,14 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let delay = match v["delay"].as_str().unwrap_or("random") { "now" => 0, "6h" => cashier::delay_between(0, 6 * 3600), _ => cashier::delay_between(300, 3600) };
             let (_wid, bal) = app.ledger.lock().await.queue_withdrawal(tok, addr, stake, cashier::now() + delay).map_err(lerr)?;
             json!({ "t": "withdraw_queued", "id": id, "balance": bal, "eta_s": delay })
+        }
+        "solvency_proof" => {
+            let tid = ledger::token_id(tok);
+            let s = app.snapshot().await;
+            match s.proof(&tid) {
+                Some((salt, bal, path)) => json!({ "t": "solvency_proof", "id": id, "epoch": s.epoch, "root": s.root(), "salt": hex::encode(salt), "balance": bal, "path": path }),
+                None => json!({ "t": "solvency_proof", "id": id, "epoch": s.epoch, "root": s.root(), "balance": 0, "path": null }),
+            }
         }
         "balance" => json!({ "t": "balance", "id": id, "balance": app.ledger.lock().await.balance(tok).map_err(lerr)? }),
         "seed" => {

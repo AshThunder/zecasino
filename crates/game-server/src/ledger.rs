@@ -110,6 +110,10 @@ impl Ledger {
     pub fn session_of_withdrawal(&self, id: i64) -> Option<String> { self.db.query_row("SELECT session FROM withdrawals WHERE id = ?1", [id], |r| r.get(0)).ok() }
 
     /// Sum of all session balances: the liability side for the solvency page.
+    pub fn balances(&self) -> Vec<(String, u64)> {
+        let mut st = self.db.prepare("SELECT id, balance FROM sessions WHERE balance > 0").unwrap();
+        st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))).unwrap().map(Result::unwrap).collect()
+    }
     pub fn liabilities(&self) -> u64 { self.db.query_row("SELECT COALESCE(SUM(balance),0) FROM sessions", [], |r| r.get::<_, i64>(0)).unwrap() as u64 }
     pub fn house_pnl(&self) -> i64 { self.db.query_row("SELECT v FROM house WHERE k='pnl'", [], |r| r.get(0)).unwrap() }
 }

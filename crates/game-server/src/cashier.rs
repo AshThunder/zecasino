@@ -23,6 +23,7 @@ impl Zec {
         if !ok { anyhow::bail!("{text}"); }
         Ok(serde_json::from_str(&text)?)
     }
+    pub async fn status(&self) -> anyhow::Result<Value> { self.call(reqwest::Method::GET, "/status", None).await }
     pub async fn address(&self, index: u64) -> anyhow::Result<String> {
         Ok(self.call(reqwest::Method::POST, "/address", Some(json!({ "index": index }))).await?["address"].as_str().unwrap_or_default().to_owned())
     }

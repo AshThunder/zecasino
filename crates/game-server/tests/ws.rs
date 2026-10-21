@@ -216,3 +216,17 @@ mod holdem_e2e {
         assert_eq!(closed["cashed_out"].as_u64().unwrap(), stacks[b0.seat]);
     }
 }
+
+#[tokio::test]
+async fn solvency_inclusion_proof() {
+    use zecasino_game_server::solvency::{verify, Node, Step};
+    let url = server().await;
+    let (mut a, _) = client(&url, 12_345_678).await;
+    send(&mut a, json!({ "t": "solvency_proof", "id": 1 })).await;
+    let p = until(&mut a, "solvency_proof").await;
+    assert_eq!(p["balance"], 12_345_678);
+    let node = |v: &Value| Node { hash: hex::decode(v["hash"].as_str().unwrap()).unwrap().try_into().unwrap(), sum: v["sum"].as_u64().unwrap() };
+    let path: Vec<Step> = p["path"].as_array().unwrap().iter().map(|s| Step { side: if s["side"] == "left" { "left" } else { "right" }, node: node(&s["node"]) }).collect();
+    let salt: [u8; 32] = hex::decode(p["salt"].as_str().unwrap()).unwrap().try_into().unwrap();
+    assert!(verify(&salt, 12_345_678, &path, &node(&p["root"])));
+}
