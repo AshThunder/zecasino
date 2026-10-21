@@ -5,3 +5,4 @@ spike/*.ufvk
 target/
 node_modules/
 .next/
+*.sqlite*
