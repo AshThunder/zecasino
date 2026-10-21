@@ -5,6 +5,7 @@ import { HeroWheel } from "@/components/HeroWheel";
 import { useEffect, useState } from "react";
 import { DEMO, setMode } from "@/lib/server";
 import { GAMES } from "@/lib/games";
+import { Walkthrough } from "@/components/Walkthrough";
 import { useLobby, pct, type Lobby } from "@/lib/lobby";
 
 
@@ -24,6 +25,7 @@ export default function LobbyPage() {
   const { data, offline } = useLobby();
   const [demo, setDemo] = useState(false); useEffect(() => setDemo(DEMO), []);
   const cov = data?.coverage ?? null;
+  const [tour, setTour] = useState(false);
   return (
     <div className="lobby">
       <section className="hero">
@@ -34,7 +36,7 @@ export default function LobbyPage() {
           <div className="hero-cta">
             <Link className="btn gold lg" href="/table/carrot">Take a seat</Link>
             <button className="btn ghost lg" onClick={() => setMode(!demo)}>{demo ? "Leave demo" : "Try with play chips"}</button>
-            <a className="btn link lg" href="#fair">How privacy works</a>
+            <button className="btn link lg" onClick={() => setTour(true)}>▶ How it works · 20 s</button>
           </div>
           <dl className={`stats ${data ? "" : "loading"}`} aria-busy={!data}>
             <div title="Transparent outputs the house wallets ever received or sent, counted from the wallet databases.">
@@ -47,6 +49,7 @@ export default function LobbyPage() {
           {offline && <p className="stats-note">Game server unreachable: live figures will appear when it is back.</p>}
         </div>
         <div className="hero-art"><HeroWheel /></div>
+        {tour && <Walkthrough onClose={() => setTour(false)} />}
       </section>
 
       <section className="games" aria-labelledby="games-h">
