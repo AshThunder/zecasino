@@ -1,4 +1,5 @@
 "use client";
+import { readable } from "@/lib/seed";
 import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
@@ -21,7 +22,7 @@ const hexb = (b: Uint8Array) => Array.from(b, x => x.toString(16).padStart(2, "0
 const roll5 = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), b => (b % 6) + 1);
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen"];
 const plural = (f: number) => (f === 6 ? "sixes" : `${f}s`);
-const short = (h: string) => (h ? `${h.slice(0, 8)}…` : "…");
+const short = (h: string) => (h ? readable(h) : "…");
 const anonTag = () => hexb(crypto.getRandomValues(new Uint8Array(2)));
 /** Same commitment the server makes: fairness::commit over the five dice bytes. */
 const seal = async (dice: number[], salt: Uint8Array) => pvpCommit(salt, new Uint8Array(dice));
@@ -194,6 +195,7 @@ export default function Liars() {
       <div className="side-col">
         <aside className="fair">
         <h4>Committed dice</h4>
+        <p className="fair-explain">Every cup is sealed before the first bid, so nobody can change their dice once they hear yours.</p>
         <p>When the cups go down, every cup is sealed as SHA-256(“zecasino:commit:v1”‖len‖salt‖dice) and the seals are shown to everyone. At the call each seal is opened and your browser recomputes it, so nobody can change their dice after hearing a bid.</p>
         <dl>
           <dt>Dealer</dt><dd className="mono">{remote ? "game server · heads-up room" : "in-browser table (server offline)"}</dd>

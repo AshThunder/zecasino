@@ -12,15 +12,16 @@ export interface Seat {
   rotate(newClientSeed: string): Promise<Revealed>;
 }
 
-export function useSeat(defaultClientSeed = "lagos-night-77") {
+export function useSeat(defaultClientSeed?: string) {
   const ref = useRef<Seat | null>(null);
-  const [view, setView] = useState({ commitment: "…", clientSeed: defaultClientSeed, nonce: 0, remote: false });
+  const [view, setView] = useState({ commitment: "…", clientSeed: defaultClientSeed ?? "", nonce: 0, remote: false });
   useEffect(() => {
     let alive = true;
     (async () => {
+      const { mySeed } = await import("./seed"); const cs = defaultClientSeed ?? mySeed();
       const { connectSeat } = await import("./server");
-      const remote = await connectSeat(defaultClientSeed).catch(() => null);
-      const seat: Seat = remote ?? (await localSeat(defaultClientSeed));
+      const remote = await connectSeat(cs).catch(() => null);
+      const seat: Seat = remote ?? (await localSeat(cs));
       if (!alive) return;
       ref.current = seat; setView({ commitment: seat.commitment, clientSeed: seat.clientSeed, nonce: seat.nonce, remote: !!remote });
     })();
@@ -35,7 +36,7 @@ export function useSeat(defaultClientSeed = "lagos-night-77") {
       import("./history").then(h => h.record(game, summarize(game, r.outcome), [{ kind: "house", game, commitment, clientSeed, nonce: r.nonce, outcome: r.outcome }]));
       return r;
     },
-    async rotate(cs: string) { const r = await ref.current!.rotate(cs); sync(); import("./history").then(h => h.attachSeed(r.commitment, r.serverSeed)); return r; },
+    async rotate(cs: string) { import("./seed").then(m => m.keepSeed(cs)); const r = await ref.current!.rotate(cs); sync(); import("./history").then(h => h.attachSeed(r.commitment, r.serverSeed)); return r; },
   };
 }
 

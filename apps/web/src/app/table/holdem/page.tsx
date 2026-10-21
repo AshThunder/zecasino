@@ -202,6 +202,7 @@ export default function Holdem() {
       <div className="side-col">
         <aside className="fair mp">
         <h4>Mental-poker shuffle</h4>
+        <p className="fair-explain">Every card is locked with three keys (yours, your opponent&apos;s and the house&apos;s), so nobody can see or stack the deck alone.</p>
         <ol className="mp-steps">
           {shuffleNames.map((who, i) => (
             <li key={i} className={steps[i] === "done" ? "done" : steps[i] === "on" ? "on" : steps[i] === "bad" ? "bad" : ""}>

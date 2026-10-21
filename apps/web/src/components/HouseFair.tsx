@@ -1,6 +1,7 @@
 "use client";
 import { ChainSees } from "@/components/ChainSees";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { newSeed, readable } from "@/lib/seed";
 import { VerifiedRound } from "./Verified";
 import { DEMO } from "@/lib/server";
 import { verifyBet, type Game, type Revealed } from "@/lib/house";
@@ -9,6 +10,7 @@ type SeatView = { commitment: string; clientSeed: string; nonce: number; remote:
 /** Provably-fair panel with real rotate + in-browser verification of every bet under the old seed. */
 export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { seat: SeatView; game: Game; bets: { nonce: number; outcome: unknown; seed: string }[]; fmt: (o: unknown) => string; formula: string; check?: (verified: unknown, recorded: unknown) => boolean; extra?: React.ReactNode }) {
   const [cs, setCs] = useState(seat.clientSeed);
+  useEffect(() => { if (seat.clientSeed) setCs(seat.clientSeed); }, [seat.clientSeed]);
   const [checks, setChecks] = useState<{ rev: Revealed; rows: { nonce: number; ok: boolean; v: string }[] } | null>(null);
   const rotate = async () => {
     const rev = await seat.rotate(cs.trim() || "zecasino");
@@ -20,10 +22,11 @@ export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { se
     <div className="side-col">
       <aside className="fair">
       <h4>Provably fair</h4>
+      <p className="fair-explain">Your seed is mixed with the house&apos;s hidden seed so neither side can rig the result. Change it anytime.</p>
       <dl>
-        <dt>Server seed commitment</dt><dd className="mono">{seat.commitment.slice(0, 10)}…{seat.commitment.slice(-8)}</dd>
-        <dt>Your client seed</dt>
-        <dd><input className="seed-input mono" value={cs} maxLength={64} onChange={e => setCs(e.target.value.replace(/\s/g, ""))} aria-label="Client seed for the next seed pair" /></dd>
+        <dt>Server seed commitment</dt><dd className="mono commit-read" title={seat.commitment}>{readable(seat.commitment)}</dd>
+        <dt>Your seed</dt>
+        <dd className="seed-row"><input className="seed-input mono" value={cs} maxLength={64} onChange={e => setCs(e.target.value.replace(/\s/g, ""))} aria-label="Your seed for the next round set" /><button type="button" className="btn ghost sm" onClick={() => setCs(newSeed())}>New seed</button></dd>
         <dt>Nonce</dt><dd className="mono">{seat.nonce}</dd>
         <dt>Dealer</dt><dd className="mono">{seat.remote ? (DEMO ? "demo server · play chips" : "game server · live") : "in-browser seat (server offline)"}</dd>
       </dl>

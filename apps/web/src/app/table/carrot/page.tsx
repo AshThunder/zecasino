@@ -1,4 +1,5 @@
 "use client";
+import { readable } from "@/lib/seed";
 import { WaitingScene } from "@/components/WaitingScene";
 import { HowTo } from "@/components/HowTo";
 import { ChainSees } from "@/components/ChainSees";
@@ -22,7 +23,7 @@ const STEPS: [Phase, string][] = [["peek", "Peek"], ["bluff", "Bluff"], ["decide
 
 type Role = "holder" | "guesser";
 const STAKE = 0.08;
-const short = (h: string) => (h ? `${h.slice(0, 8)}…${h.slice(-8)}` : "…");
+const short = (h: string) => (h ? readable(h) : "…");
 
 export default function CarrotTable() {
   const scope = useRef<HTMLDivElement>(null);
@@ -173,6 +174,7 @@ export default function CarrotTable() {
       <div className="side-col">
         <aside className="fair">
         <h4>Sealed box</h4>
+        <p className="fair-explain">The box is sealed before anyone peeks, so nobody can move the carrot after hearing the bluff.</p>
         <dl>
           <dt>Commitment (published before the peek)</dt><dd className="mono">{short(seal.commitment)}</dd>
           <dt>Dealer</dt><dd className="mono">{remote ? "game server · live room" : "in-browser table (server offline)"}</dd>

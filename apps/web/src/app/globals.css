@@ -800,3 +800,6 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
 .wt-pool { width: 128px; height: 128px; top: 36px; padding: 0 12px; line-height: 1.25; font-size: .7rem; }
 .wt-note { top: 172px; } .wt-chainline, .wt-unlink { bottom: 12px; }
 @media (max-width: 640px) { .wt-wallet { left: 15%; width: 76px; } .wt-pool { width: 92px; height: 92px; top: 44px; font-size: .6rem; } .wt-note { top: 142px; } .wt-chainline { font-size: .62rem; padding: 0 8px; } }
+.fair-explain { font-size: .8rem; line-height: 1.5; color: #CFE5D8cc; margin: -2px 0 12px; }
+.seed-row { display: flex; gap: 6px; align-items: center; } .seed-row .seed-input { flex: 1; min-width: 0; }
+.commit-read { letter-spacing: .04em; word-spacing: .1em; }
