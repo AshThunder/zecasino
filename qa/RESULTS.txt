@@ -1,0 +1,58 @@
+PASS [Crash] manual cash-out round cashed
+PASS [Crash] auto cash-out at 1.01× settled payout entry written after the bet (or the round busted under 1.01×, 1% odds)
+PASS [Crash] refresh mid-round keeps cash-out button 
+PASS [Crash] every finished round verified in browser 1 ✓ 0 ✗
+PASS [Crash] ledger reconcile 
+PASS [Crash] bet > balance rejected insufficient balance
+PASS [Carrot] round plays to reveal (two sessions) 
+PASS [Carrot] normal: seal verified by both browsers 
+PASS [Carrot] normal: ledger reconcile A 
+PASS [Carrot] normal: ledger reconcile B 
+PASS [Carrot] guesser disconnect mid-round, reconnects and finishes 
+PASS [Carrot] disconnect: seal verified by both browsers 
+PASS [Carrot] disconnect: ledger reconcile A 
+PASS [Carrot] disconnect: ledger reconcile B 
+PASS [Carrot] holder refresh mid-round resumes the round 
+PASS [Carrot] refresh: seal verified by both browsers 
+PASS [Carrot] refresh: ledger reconcile A 
+PASS [Carrot] refresh: ledger reconcile B 
+PASS [Carrot] bet > balance rejected insufficient balance
+PASS [Liar's Dice] round plays to reveal (two sessions) 
+PASS [Liar's Dice] normal: all cups verified in both browsers 
+PASS [Liar's Dice] normal: ledger reconcile A 
+PASS [Liar's Dice] normal: ledger reconcile B 
+PASS [Liar's Dice] caller disconnects mid-round, reconnects and calls 
+PASS [Liar's Dice] disconnect: all cups verified in both browsers 
+PASS [Liar's Dice] disconnect: ledger reconcile A 
+PASS [Liar's Dice] disconnect: ledger reconcile B 
+PASS [Liar's Dice] caller refreshes mid-round, resumes and calls 
+PASS [Liar's Dice] refresh: all cups verified in both browsers 
+PASS [Liar's Dice] refresh: ledger reconcile A 
+PASS [Liar's Dice] refresh: ledger reconcile B 
+PASS [Liar's Dice] bet > balance rejected insufficient balance
+PASS [Hold'em] hand 1: all shuffle/share checks passed in both browsers 
+PASS [Hold'em] hand 2: all shuffle/share checks passed in both browsers 
+PASS [Hold'em] two hands played heads-up (two sessions), incl. a dropped connection mid-hand 16 actions
+PASS [Hold'em] ledger reconcile A after leaving 
+PASS [Hold'em] ledger reconcile B after leaving 
+PASS [Hold'em] buy-in > balance rejected buy-in must be 0.2 to 0.5 TAZ
+PASS [Hold'em] refresh mid-hand resumes the table 
+PASS [Hold'em] refreshed player finishes the hand (own hole cards reopened) 
+PASS [Hold'em] ledger reconcile A after refresh hand 
+PASS [Hold'em] ledger reconcile B after refresh hand 
+PASS [Session] fresh session reconciles 
+PASS [Dice] 3 rolls verified 3 ✓ 0 ✗
+PASS [Dice] ledger reconcile 
+PASS [Dice] bet > balance rejected insufficient balance
+PASS [Roulette] 3 spins verified 3 ✓ 0 ✗
+PASS [Roulette] ledger reconcile 
+PASS [Roulette] bet > balance rejected insufficient balance
+PASS [Blackjack] 4 hands (incl. double) verified 4 ✓ 0 ✗
+PASS [Blackjack] ledger reconcile 
+PASS [Blackjack] bet > balance rejected insufficient balance
+PASS [Blackjack] refresh mid-hand resumes the hand 
+PASS [Blackjack] ledger reconcile after refresh 
+PASS [Blackjack] disconnect mid-hand resumes the hand 
+PASS [Blackjack] ledger reconcile after disconnect 
+PASS [Session] closed tab restored from session key 
+PASS [Session] ledger reconcile after restore 

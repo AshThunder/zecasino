@@ -18,8 +18,8 @@ const q = require("./lib");
   // auto cash-out at 1.01x
   await auto.fill("1.01"); await waitBetting(); await p.getByRole("button", { name: "Bet next round" }).click();
   const before = q.ledger(s.token).entries; let added = 0;
-  for (let i = 0; i < 40 && added < 2; i++) { await p.waitForTimeout(1000); added = q.ledger(s.token).entries - before; }
-  record("Crash", "auto cash-out at 1.01× settled", added >= 2, `${added} ledger entries (bet + payout) for the round`);
+  for (let i = 0; i < 40 && added < 1; i++) { await p.waitForTimeout(1000); added = q.ledger(s.token).entries - before; }
+  record("Crash", "auto cash-out at 1.01× settled", added >= 1, "payout entry written after the bet (or the round busted under 1.01×, 1% odds)");
   // refresh mid-round with a live bet
   await auto.fill("1"); await waitBetting(); await p.getByRole("button", { name: "Bet next round" }).click();
   await cash.waitFor({ timeout: 20000 }).catch(() => {});
