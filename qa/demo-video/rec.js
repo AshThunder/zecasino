@@ -21,7 +21,7 @@ const CURSOR = () => {
   });
 };
 
-let mx = 800, my = 450;
+let mx = 960, my = 540;
 async function glide(p, x, y, ms = 700) {
   const n = Math.max(12, Math.round(ms / 16)); const x0 = mx, y0 = my;
   for (let i = 1; i <= n; i++) { const t = i / n, e = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; await p.mouse.move(x0 + (x - x0) * e, y0 + (y - y0) * e); await sleep(ms / n); }
@@ -56,23 +56,23 @@ const SCENES = {
     // start recording right as a betting window opens
     await p.getByRole("button", { name: /Wait for next round|Cash out/ }).first().waitFor({ timeout: 120000 }).catch(() => {}); await bet.waitFor({ timeout: 120000 }); return async () => {
     await click(p, p.getByRole("button", { name: "½" }), 600); await click(p, p.getByRole("button", { name: "2×" }), 350); await click(p, p.getByRole("button", { name: "2×" }), 250);
-    await click(p, bet, 500);
+    await click(p, bet, 500); mark("bet");
     const cash = p.getByRole("button", { name: /Cash out/ });
     try { await cash.waitFor({ timeout: 20000 }); await to(p, cash, 400);
       for (let i = 0; i < 200 && await cash.count(); i++) { const m = await p.evaluate(() => Number((document.body.innerText.match(/(\d+\.\d\d)×/) || [])[1] || 0)); if (m >= 1.6) break; await sleep(60); }
-      if (await cash.count()) { await click(p, cash, 120); console.log("CASHED"); } } catch {}
+      if (await cash.count()) { await click(p, cash, 120); mark("cashout"); console.log("CASHED"); } } catch {}
     await sleep(3000); }; },
   async blackjack(p) { await p.goto(BASE + "/table/blackjack"); await p.waitForLoadState("networkidle"); await sleep(1500);
     const clr = p.getByRole("button", { name: "Clear" }); if (await clr.count()) await clr.click(); return async () => {
     const rack = p.locator(".rack button"), circle = p.locator(".bet-circle");
     await click(p, rack.nth(3)); await click(p, circle); await click(p, rack.nth(2), 500); await click(p, circle); await sleep(200); await click(p, circle, 200);
-    await click(p, p.getByRole("button", { name: "Deal" })); await sleep(2600);
+    await click(p, p.getByRole("button", { name: "Deal" })); mark("deal"); await sleep(2600);
     for (let i = 0; i < 5; i++) {
       const stand = p.getByRole("button", { name: "Stand", exact: true }); if (!(await stand.count())) break;
       const t = Number((await p.locator(".hand.player .hand-total").first().textContent().catch(() => "")).replace(/\D/g, "")) || 20;
       await click(p, t < 13 ? p.getByRole("button", { name: "Hit", exact: true }) : stand); await sleep(1900);
     }
-    await sleep(1800); await click(p, p.getByRole("button", { name: /Reveal seed/ }), 900); await sleep(3200);
+    mark("result"); await sleep(1800); await click(p, p.getByRole("button", { name: /Reveal seed/ }), 900); mark("verify"); await sleep(3200);
     const v = p.locator(".vrow").first(); if (await v.count()) await to(p, v, 700); await sleep(1500); }; },
   async solvency(p) { await p.goto(BASE + "/solvency"); await p.waitForLoadState("networkidle"); await sleep(1500); return async () => {
     await glide(p, 600, 350, 800); await sleep(800);
@@ -90,18 +90,19 @@ const SCENES = {
       for (const n of ["Check", /^Call/]) if (await vis(p, n)) { await click(p, p.getByRole("button", { name: n }).first(), 600); await sleep(600); break; }
       if (await p.locator(".result-toast").count()) { mark("showdown"); break; } await sleep(400);
     }
-    await sleep(2500); const f = p.locator("aside.fair"); if (await f.count()) { await to(p, f, 900); await sleep(2500); } }; },
+    await sleep(3500); await glide(p, 1500, 500, 900); await sleep(2500); }; },
   async carrot(p) { await p.goto(BASE + "/table/carrot"); await p.waitForLoadState("networkidle"); await sleep(1500); return async () => {
     await click(p, p.locator(".stake-pick button", { hasText: "0.020" }), 800); await click(p, p.getByRole("button", { name: /^Quick match/ })); mark("queued");
     const h = p.getByRole("button", { name: "Play the house instead" }); await h.waitFor({ timeout: 60000 }); mark("house-offer"); await sleep(1200);
     await click(p, h); mark("vs-house"); await sleep(2500);
     const badge = p.locator(".house-badge").first(); if (await badge.count()) { await to(p, badge, 700); await sleep(1500); }
-    for (let i = 0; i < 40; i++) {
-      const peek = p.getByRole("button", { name: "Peek inside" }), keep = p.getByRole("button", { name: "Keep my box" });
-      if (await peek.count() && await peek.isEnabled()) { await click(p, peek); await sleep(2000); const g = p.getByRole("button", { name: /got the carrot/ }); if (await g.count()) await click(p, g.first()); break; }
-      if (await keep.count() && await keep.isEnabled()) { await click(p, keep); break; } await sleep(500);
-    }
-    await sleep(4000); mark("done"); }; },
+    // Best take for the narration: the house holds (peeks + bluffs), we are the guesser.
+    const role = await Promise.race([p.getByText("The house is peeking").first().waitFor({ timeout: 15000 }).then(() => "guesser"), p.getByRole("button", { name: "Peek inside" }).waitFor({ timeout: 15000 }).then(() => "holder")]).catch(() => "?");
+    console.log("ROLE", role); if (role !== "guesser") return; mark("house-peeking");
+    await p.getByText(/got the carrot|empty/i).first().waitFor({ timeout: 20000 }).catch(() => {}); mark("bluff"); await sleep(1500);
+    await to(p, p.getByRole("button", { name: "Keep my box" }), 800); await sleep(900);
+    await click(p, p.getByRole("button", { name: "Swap boxes" }), 600); mark("decide");
+    for (let i = 0; i < 40 && !(await p.locator(".result-toast").count()); i++) await sleep(250); mark("reveal"); await sleep(3000); const sb = p.locator("aside.fair").first(); if (await sb.count()) { await glide(p, 1500, 520, 900); } await sleep(4000); mark("done"); }; },
   async liars(p, opp) { await p.goto(BASE + "/table/liars"); await p.waitForLoadState("networkidle"); await sleep(1500);
     await opp.goto(BASE + "/table/liars"); await opp.waitForLoadState("networkidle"); await sleep(1000); return async () => {
     await click(p, p.locator(".stake-pick button", { hasText: "0.010" }), 800); await click(p, p.getByRole("button", { name: /^Quick match/ })); await sleep(1500);
@@ -109,7 +110,7 @@ const SCENES = {
     const vis = async (pg, n) => { const l = pg.getByRole("button", { name: n }); return (await l.count()) > 0 && await l.first().isVisible() && await l.first().isEnabled(); };
     for (let i = 0, bids = 0; i < 80; i++) {
       if (bids > 0 && await vis(opp, "Liar!")) await opp.getByRole("button", { name: "Liar!" }).click().catch(() => {}); else if (await vis(opp, "Bid")) await opp.getByRole("button", { name: "Bid" }).first().click().catch(() => {});
-      if (await vis(p, "Bid")) { if (bids++ < 1) { await click(p, p.getByRole("button", { name: "Bid" }).first(), 600); } else if (await vis(p, "Liar!")) { await click(p, p.getByRole("button", { name: "Liar!" }), 700); } }
+      if (await vis(p, "Bid")) { if (bids++ < 1) { await sleep(1200); await click(p, p.getByRole("button", { name: "Bid" }).first(), 600); mark("bid"); } else if (await vis(p, "Liar!")) { await click(p, p.getByRole("button", { name: "Liar!" }), 700); } }
       if (await vis(p, "Rematch")) { mark("over"); break; } await sleep(400);
     }
     await sleep(3500); }; },
@@ -119,7 +120,7 @@ const T0 = Date.now(); let REC = 0; function mark(n) { console.log("MARK", n, ((
 (async () => {
   const real = ["deposit", "withdraw", "solvency"].includes(scene);
   const br = await chromium.launchPersistentContext(require("fs").mkdtempSync("/tmp/zcrec-"), { executablePath: "/usr/bin/google-chrome", headless: false, viewport: null,
-    args: ["--no-sandbox", "--kiosk", "--window-position=0,0", "--window-size=1600,900", "--force-device-scale-factor=1.2", "--disable-infobars", "--no-first-run", "--hide-scrollbars", "--autoplay-policy=no-user-gesture-required"], ignoreDefaultArgs: ["--enable-automation"] });
+    args: ["--no-sandbox", "--kiosk", "--window-position=0,0", "--window-size=1920,1080", "--force-device-scale-factor=1", "--disable-infobars", "--no-first-run", "--hide-scrollbars", "--autoplay-policy=no-user-gesture-required"], ignoreDefaultArgs: ["--enable-automation"] });
   const ctx = br;
   await ctx.addInitScript(([demo]) => { localStorage.setItem("zc.howto.seen", "all"); if (demo) localStorage.setItem("zc.mode", "demo"); else localStorage.removeItem("zc.mode"); }, [!real]);
   await ctx.addInitScript(CURSOR);
