@@ -24,6 +24,7 @@ impl Zec {
         Ok(serde_json::from_str(&text)?)
     }
     pub async fn status(&self) -> anyhow::Result<Value> { self.call(reqwest::Method::GET, "/status", None).await }
+    pub async fn txview(&self, txid: &str) -> anyhow::Result<Value> { self.call(reqwest::Method::GET, &format!("/txview/{txid}"), None).await }
     pub async fn chain(&self) -> anyhow::Result<Value> { self.call(reqwest::Method::GET, "/chain", None).await }
     pub async fn reserve(&self) -> anyhow::Result<Value> { self.call(reqwest::Method::GET, "/reserve", None).await }
     pub async fn address(&self, index: u64) -> anyhow::Result<String> {

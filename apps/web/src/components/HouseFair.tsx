@@ -1,4 +1,5 @@
 "use client";
+import { ChainSees } from "@/components/ChainSees";
 import { useState } from "react";
 import { verifyBet, type Game, type Revealed } from "@/lib/house";
 
@@ -14,7 +15,8 @@ export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { se
     setChecks({ rev, rows });
   };
   return (
-    <aside className="fair">
+    <div className="side-col">
+      <aside className="fair">
       <h4>Provably fair</h4>
       <dl>
         <dt>Server seed commitment</dt><dd className="mono">{seat.commitment.slice(0, 10)}…{seat.commitment.slice(-8)}</dd>
@@ -34,5 +36,7 @@ export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { se
       {extra}
       <p>{formula}</p>
     </aside>
+      <ChainSees table={game} />
+    </div>
   );
 }

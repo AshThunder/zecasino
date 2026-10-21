@@ -1,4 +1,5 @@
 "use client";
+import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -185,7 +186,8 @@ export default function Liars() {
           </div>
         )}
       </div>
-      <aside className="fair">
+      <div className="side-col">
+        <aside className="fair">
         <h4>Committed dice</h4>
         <p>When the cups go down, every cup is sealed as SHA-256(“zecasino:commit:v1”‖len‖salt‖dice) and the seals are shown to everyone. At the call each seal is opened and your browser recomputes it, so nobody can change their dice after hearing a bid.</p>
         <dl>
@@ -193,6 +195,8 @@ export default function Liars() {
           {players.map(p => <div key={p.anon}><dt>{p.name}</dt><dd className={`mono ${p.ok === false ? "bad" : p.ok ? "ok" : ""}`}>{p.commitment ? short(p.commitment) : "–"}{p.ok === true ? (p.me && phase !== "reveal" ? " · your seal checks out" : " · verified") : p.ok === false ? " · MISMATCH" : ""}</dd></div>)}
         </dl>
       </aside>
+        <ChainSees table="liars" />
+      </div>
     </div>
   );
 }

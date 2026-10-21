@@ -1,4 +1,5 @@
 "use client";
+import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -195,7 +196,8 @@ export default function Holdem() {
           {room && result && <><span className="wait">Next hand in a few seconds…</span><button className="btn ghost" onClick={leave}>Leave table</button></>}
         </div>
       </div>
-      <aside className="fair mp">
+      <div className="side-col">
+        <aside className="fair mp">
         <h4>Mental-poker shuffle</h4>
         <ol className="mp-steps">
           {shuffleNames.map((who, i) => (
@@ -213,6 +215,8 @@ export default function Holdem() {
         <p>Every card is ElGamal-encrypted to the sum of three keys: yours, your opponent&apos;s and the house&apos;s. A card opens only with all three decryption shares. Your hole cards open here, in this tab, with your own share; the house sees them only if you reach showdown.</p>
         <ul className="hand-log">{checks.map((l, i) => <li key={i}>{l}</li>)}</ul>
       </aside>
+        <ChainSees table="holdem" />
+      </div>
     </div>
   );
 }

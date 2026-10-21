@@ -261,6 +261,16 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             json!({ "t": "pvp_resumed", "id": id })
         }
         "seat_get" => json!({ "t": "seat", "id": id, "seat": app.seat_view(tok).await }),
+        // What a chain observer gets for this session: the public, encrypted parts of its deposit/withdrawal txs.
+        "chain_view" => {
+            let txs = app.ledger.lock().await.chain_txs(tok);
+            let mut views = vec![];
+            for (kind, txid) in txs.iter().take(10) {
+                let v = match &app.zec { Some(z) => tokio::time::timeout(std::time::Duration::from_secs(5), z.txview(txid)).await.ok().and_then(|r| r.ok()), None => None };
+                views.push(json!({ "kind": kind, "txid": txid, "view": v }));
+            }
+            json!({ "t": "chain_view", "id": id, "txs": views })
+        }
         "cashier_deposit" => {
             let zec = app.zec.as_ref().ok_or("cashier offline")?;
             let idx = app.ledger.lock().await.deposit_index(tok);

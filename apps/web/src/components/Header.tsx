@@ -11,6 +11,7 @@ import { isMuted, setMuted } from "@/lib/sfx";
 
 import { GAMES } from "@/lib/games";
 import { installMotion } from "@/lib/motion";
+import { DepositShield } from "./DepositShield";
 const NAV = [["Lobby", "/"], ["Provably fair", "/#fair"], ["Solvency", "/solvency"]] as const;
 const PVP = GAMES.filter(g => g.kind.startsWith("Player")), HOUSE = GAMES.filter(g => !PVP.includes(g));
 
@@ -91,6 +92,7 @@ export function Header() {
         <MobileMenu path={path} />
       </div>
       <CashierDialog open={open} onClose={() => setOpen(false)} />
+      <DepositShield />
     </header>
   );
 }

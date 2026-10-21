@@ -4088,6 +4088,7 @@ dependencies = [
  "axum",
  "bip0039",
  "hex",
+ "orchard",
  "rand 0.10.3",
  "rand 0.8.8",
  "reqwest",

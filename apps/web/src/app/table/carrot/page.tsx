@@ -1,4 +1,5 @@
 "use client";
+import { ChainSees } from "@/components/ChainSees";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -163,7 +164,8 @@ export default function CarrotTable() {
         </div>
       </div>
       {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
-      <aside className="fair">
+      <div className="side-col">
+        <aside className="fair">
         <h4>Sealed box</h4>
         <dl>
           <dt>Commitment (published before the peek)</dt><dd className="mono">{short(seal.commitment)}</dd>
@@ -173,6 +175,8 @@ export default function CarrotTable() {
         </dl>
         <p className="note">The carrot&apos;s box is sealed as SHA-256(“zecasino:commit:v1”‖len‖salt‖box) before anyone peeks. At reveal the salt opens it and your browser recomputes the hash, so nobody can move the carrot after hearing the bluff.</p>
       </aside>
+        <ChainSees table="carrot" />
+      </div>
     </div>
   );
 }

@@ -218,3 +218,40 @@ pub fn chain_facts(db_path: &Path) -> anyhow::Result<(u32, String, u64, u64)> {
     let t_out: u64 = c.query_row("SELECT COUNT(*) FROM sent_notes WHERE output_pool = 0", [], |r| r.get(0))?;
     Ok((h, hex::encode(hash), t_in, t_out))
 }
+
+/// What a chain observer can read about one of the house wallet's transactions: its id and block, how many
+/// shielded actions each pool carries, and per action only the public, encrypted parts (nullifier, note
+/// commitment, ephemeral key, note ciphertext). Addresses, amounts and memos are not in the transaction data at all.
+pub fn tx_view(db_path: &Path, txid_hex: &str) -> anyhow::Result<serde_json::Value> {
+    let c = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let mut id = hex::decode(txid_hex)?; id.reverse();
+    let (raw, h): (Vec<u8>, Option<u32>) = c.query_row("SELECT raw, mined_height FROM transactions WHERE txid = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    let tip: u32 = c.query_row("SELECT MAX(height) FROM blocks", [], |r| r.get(0))?;
+    let tx = Transaction::read(&raw[..], BranchId::for_height(&NETWORK, BlockHeight::from_u32(h.unwrap_or(tip))))?;
+    let pool = |b: Option<&orchard::Bundle<orchard::bundle::Authorized, zcash_protocol::value::ZatBalance>>| b.map(|b| b.actions().iter().map(|a| {
+        let n = a.encrypted_note();
+        serde_json::json!({ "nullifier": hex::encode(a.nullifier().to_bytes()), "cmx": hex::encode(a.cmx().to_bytes()), "epk": hex::encode(n.epk_bytes),
+            "ciphertext": hex::encode(&n.enc_ciphertext.as_ref()[..]), "ciphertext_len": n.enc_ciphertext.as_ref().len() })
+    }).collect::<Vec<_>>()).unwrap_or_default();
+    let t = tx.transparent_bundle();
+    Ok(serde_json::json!({ "txid": txid_hex, "height": h, "size": raw.len(), "version": format!("{:?}", tx.version()),
+        "orchard": pool(tx.orchard_bundle()), "ironwood": pool(tx.ironwood_bundle()),
+        "sapling_outputs": tx.sapling_bundle().map(|b| b.shielded_outputs().len()).unwrap_or(0), "sapling_spends": tx.sapling_bundle().map(|b| b.shielded_spends().len()).unwrap_or(0),
+        "transparent_in": t.map(|b| b.vin.len()).unwrap_or(0), "transparent_out": t.map(|b| b.vout.len()).unwrap_or(0) }))
+}
+
+#[cfg(test)]
+mod view_tests {
+    /// Runs against the dev wallet when present: the testnet deposit from the deposit test must parse and expose
+    /// only encrypted action data.
+    #[test]
+    fn tx_view_of_dev_deposit() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../run/zec-wallet.sqlite");
+        if !p.exists() { return; }
+        let v = super::tx_view(&p, "bac767c36b188249339c72d324be2c1297a7b6191b304b3dfa59c3c557c9802b").unwrap();
+        let acts = v["ironwood"].as_array().unwrap();
+        assert!(!acts.is_empty());
+        assert_eq!(acts[0]["ciphertext_len"].as_u64().unwrap() as usize, acts[0]["ciphertext"].as_str().unwrap().len() / 2);
+        println!("{}", serde_json::to_string(&serde_json::json!({ "height": v["height"], "n": acts.len(), "orchard": v["orchard"].as_array().unwrap().len(), "t_in": v["transparent_in"], "ct": &acts[0]["ciphertext"].as_str().unwrap()[..32] })).unwrap());
+    }
+}

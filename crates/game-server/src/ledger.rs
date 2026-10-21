@@ -59,6 +59,16 @@ impl Ledger {
         Ok(nb)
     }
 
+    /// This session's on-chain transactions: credited deposits (ref "txid:pool:index") and sent withdrawals.
+    pub fn chain_txs(&self, token: &str) -> Vec<(String, String)> {
+        let id = token_id(token);
+        let mut out: Vec<(String, String)> = { let mut st = self.db.prepare("SELECT ref FROM entries WHERE session = ?1 AND kind = 'deposit' AND ref LIKE '%:%' ORDER BY seq").unwrap();
+            st.query_map([&id], |r| r.get::<_, String>(0)).unwrap().filter_map(|r| r.ok()).filter_map(|r| r.split(':').next().map(|t| ("deposit".to_owned(), t.to_owned()))).collect() };
+        let mut st = self.db.prepare("SELECT txid FROM withdrawals WHERE session = ?1 AND txid IS NOT NULL ORDER BY id").unwrap();
+        out.extend(st.query_map([&id], |r| r.get::<_, String>(0)).unwrap().filter_map(|r| r.ok()).map(|t| ("withdrawal".to_owned(), t)));
+        out.dedup(); out
+    }
+
     // ---- restart safety: seats, open blackjack hands, crash round counter and open crash bets ----
     pub fn save_seat(&self, token: &str, seat: &str, hand: Option<&str>) {
         self.db.execute("INSERT INTO seats (session, seat, hand) VALUES (?1, ?2, ?3) ON CONFLICT(session) DO UPDATE SET seat = ?2, hand = ?3", params![token_id(token), seat, hand]).unwrap();

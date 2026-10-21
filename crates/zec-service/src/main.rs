@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
             } });
             let app = Router::new()
                 .route("/status", get(api_status)).route("/address", post(api_address))
-                .route("/deposits", get(api_deposits)).route("/withdraw", post(api_withdraw)).route("/reserve", get(api_reserve)).route("/chain", get(api_chain))
+                .route("/deposits", get(api_deposits)).route("/withdraw", post(api_withdraw)).route("/reserve", get(api_reserve)).route("/chain", get(api_chain)).route("/txview/{txid}", get(api_txview))
                 .with_state(svc.clone());
             let addr = svc.cfg.api.clone();
             tracing::info!(%addr, lwd = %svc.cfg.lwd, "zec-service listening");
@@ -115,6 +115,11 @@ async fn api_reserve(State(s): State<Arc<Svc>>) -> ApiResult {
         "tip": db.chain_height().map_err(|e| ise(e.into()))?.map(u32::from), "total_zat": total, "network": "testnet" })))
 }
 
+async fn api_txview(State(s): State<Arc<Svc>>, h: HeaderMap, axum::extract::Path(txid): axum::extract::Path<String>) -> ApiResult {
+    auth(&s, &h)?;
+    if txid.len() != 64 || !txid.bytes().all(|b| b.is_ascii_hexdigit()) { return Err((StatusCode::BAD_REQUEST, "txid".into())); }
+    Ok(Json(wallet::tx_view(&s.cfg.db, &txid).map_err(ise)?))
+}
 /// Public: tip + block hash and transparent-output counts for the hot and the reserve wallet.
 async fn api_chain(State(s): State<Arc<Svc>>) -> ApiResult {
     let (tip, hash, hi, ho) = wallet::chain_facts(&s.cfg.db).map_err(ise)?;
