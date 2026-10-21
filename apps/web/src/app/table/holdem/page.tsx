@@ -41,7 +41,7 @@ export default function Holdem() {
   const [, tick] = useState(0);
   useEffect(() => { if (!deadline) return; const i = setInterval(() => tick(t => t + 1), 250); return () => clearInterval(i); }, [deadline]);
   const k = useRef<{ sk: string; pks: Pk[]; joint: string; deck: Masked[] }>({ sk: "", pks: [], joint: "", deck: [] });
-  const seatRef = useRef(0);
+  const seatRef = useRef(0); const handRef = useRef(0);
   const { contextSafe } = useGSAP({ scope });
   const note = (s: string) => setChecks(c => [s, ...c].slice(0, 6));
 
@@ -62,9 +62,13 @@ export default function Holdem() {
       const ix = (m: Msg) => (m.by === "house" ? 0 : m.by === c.session?.anonHoldem ? -1 : 1);
       const on = (t: string, f: (m: Msg) => void) => offs.push(c.on(t, f));
       on("hm_seated", m => { setSearching(false); setNotice(null); setRoom(m.room); setSeat(m.seat); seatRef.current = m.seat; setOpp(m.opponent); });
-      on("hm_hand", m => { setHandNo(m.hand); setButton(m.button); setHole([]); setOppHole(null); setBoard([]); setResult(null); setSt(null); setSteps(["wait", "wait", "wait"]); setChecks([]); });
+      on("hm_hand", m => {
+        const saved = JSON.parse(sessionStorage.getItem("zc.hm.sk") ?? "null");
+        k.current.sk = saved && saved.room === m.room && saved.hand === m.hand ? saved.sk : ""; handRef.current = m.hand; setHandNo(m.hand); setButton(m.button); setHole([]); setOppHole(null); setBoard([]); setResult(null); setSt(null); setSteps(["wait", "wait", "wait"]); setChecks([]); });
       on("hm_key_req", m => {
+        // Kept for this tab only, so a refresh mid-hand can still open its cards and send shares.
         const kp = mp.keygen(); k.current.sk = kp.sk; setMyKey(kp.pk.key);
+        sessionStorage.setItem("zc.hm.sk", JSON.stringify({ room: m.room, hand: handRef.current, sk: kp.sk }));
         c.send({ t: "hm_key", room: m.room, pk: kp.pk });
       });
       on("hm_keys", m => { k.current.pks = m.pks; k.current.joint = m.joint; note("3 deck keys published, each with a proof of knowledge"); });
@@ -110,7 +114,8 @@ export default function Holdem() {
       on("hm_board", m => {
         const ok = (m.positions as number[]).every((p, i) => mp.unmask(k.current.deck[p], m.shares[p]) === m.cards[i]);
         note(ok ? `${["", "Flop", "Turn", "River"][m.street]} opened from 3 verified shares` : "BOARD SHARES DO NOT MATCH");
-        setBoard(b => [...b, ...m.cards]); play("card", 0.5); dealFx(".board-slot .pcard:not(.dealt)");
+        const upto = ({ 1: 3, 2: 4, 3: 5 } as Record<number, number>)[m.street] ?? 5;
+        setBoard(b => (b.length >= upto ? b : [...b.slice(0, upto - m.cards.length), ...m.cards])); play("card", 0.5); dealFx(".board-slot .pcard:not(.dealt)");
       });
       on("hm_result", m => {
         setResult(m); setSt(s => (s ? { ...s, legal: null } : s));
@@ -123,6 +128,8 @@ export default function Holdem() {
       });
       on("hm_closed", m => { setNotice(m.reason ? `Table closed: ${m.reason}. ⓩ ${z(m.cashed_out)} returned to your balance.` : null); setRoom(null); setSt(null); setHole([]); setBoard([]); setResult(null); });
       on("error", m => setErr(m.error));
+      on("reconnected", () => { getClient().then(n => n?.rpc({ t: "pvp_resume" }).catch(() => {})); });
+      c.rpc({ t: "pvp_resume" }).catch(() => {});
     })();
     return () => { alive = false; offs.forEach(f => f()); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

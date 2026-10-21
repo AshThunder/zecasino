@@ -42,6 +42,11 @@ pub struct App {
     pub solvency: Mutex<Option<solvency::Snapshot>>,
     /// Hold'em stall limits in ms: betting action, and protocol steps (keys, shuffles, shares).
     pub hm_act_ms: std::sync::atomic::AtomicU64,
+    /// Carrot / Liar's Dice: a stalled player is auto-played after this long without progress.
+    pub pvp_idle_ms: std::sync::atomic::AtomicU64,
+    /// Per-session messages of the round in progress, replayed to a refreshed tab.
+    pub(crate) replay: Mutex<HashMap<String, Vec<Value>>>,
+    pvp_seen: Mutex<HashMap<String, std::time::Instant>>,
     pub hm_proto_ms: std::sync::atomic::AtomicU64,
     pub dev_credit: bool,
     pub zec: Option<cashier::Zec>,
@@ -57,12 +62,15 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(Ledger::open(db).expect("ledger")), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new()), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), hm_act_ms: 30_000.into(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
         if let Some(list) = self.conns.lock().await.get(token) { for tx in list { let _ = tx.send(v.to_string()); } }
     }
+    pub(crate) async fn log_to(&self, token: &str, v: Value) { self.replay.lock().await.entry(token.to_owned()).or_default().push(v.clone()); self.notify(token, v).await; }
+    pub(crate) async fn log_reset(&self, token: &str) { self.replay.lock().await.remove(token); }
+    async fn touch(&self, room: &str) { self.pvp_seen.lock().await.insert(room.to_owned(), std::time::Instant::now()); }
     pub async fn notify_session(&self, session: &str, v: Value) {
         for (tok, list) in self.conns.lock().await.iter() { if cashier::session_matches(tok, session) { for tx in list { let _ = tx.send(v.to_string()); } } }
     }
@@ -81,6 +89,7 @@ impl App {
 }
 
 pub fn router(app: Arc<App>) -> Router {
+    tokio::spawn(pvp_sweeper(app.clone()));
     Router::new()
         .route("/ws", get(ws))
         .route("/health", get(|| async { "ok" }))
@@ -147,6 +156,29 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
     writer.abort();
 }
 
+/// Carrot / Liar's Dice stall handling: after `pvp_idle_ms` without progress the player who owes
+/// a move is played for. Carrot: the guesser keeps their box. Liar's Dice: with a bid on the table
+/// the stalled player calls it; on the opening turn they bid one of their first die's face.
+pub async fn pvp_sweeper(app: Arc<App>) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        let limit = app.pvp_idle_ms.load(std::sync::atomic::Ordering::Relaxed) as u128;
+        let stale: Vec<String> = app.pvp_seen.lock().await.iter().filter(|(_, t)| t.elapsed().as_millis() >= limit).map(|(r, _)| r.clone()).collect();
+        for room in stale {
+            let mv = if let Some(g) = app.carrots.lock().await.get(&room) { Some((g.guesser.token.clone(), json!({ "t": "carrot_choose", "room": room, "swap": false }))) }
+                else if let Some(g) = app.liars.lock().await.get(&room) {
+                    let tok = g.players[g.turn].token.clone();
+                    Some((tok, if g.bid.is_some() { json!({ "t": "liars_call", "room": room }) } else { json!({ "t": "liars_bid", "room": room, "q": 1, "f": g.dice[g.turn][0] }) }))
+                } else { None };
+            let Some((tok, msg)) = mv else { app.pvp_seen.lock().await.remove(&room); continue };
+            app.touch(&room).await;
+            let (dummy, _rx) = mpsc::unbounded_channel::<String>();
+            let t = msg["t"].as_str().unwrap().to_owned();
+            let _ = handle(&app, &tok, &t, &msg, &Value::Null, &dummy, &mut None).await;
+        }
+    }
+}
+
 async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &Tx, crash_sub: &mut Option<tokio::task::JoinHandle<()>>) -> Result<Option<Value>, &'static str> {
     let stake = v["stake"].as_u64().unwrap_or(0);
     Ok(Some(match t {
@@ -155,6 +187,14 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let amt = v["amount"].as_u64().unwrap_or(0).min(100_000_000);
             let b = app.ledger.lock().await.apply(tok, amt as i64, "deposit", "dev").map_err(lerr)?;
             json!({ "t": "balance", "id": id, "balance": b })
+        }
+        "pvp_resume" => {
+            // Hold'em rebuilds its own replay (seat first); other rooms just replay their log.
+            if !app.hm_resume(tok, tx).await {
+                let log = app.replay.lock().await.get(tok).cloned().unwrap_or_default();
+                for mut m in log { m["replay"] = json!(true); let _ = tx.send(m.to_string()); }
+            }
+            json!({ "t": "pvp_resumed", "id": id })
         }
         "seat_get" => json!({ "t": "seat", "id": id, "seat": app.seat_view(tok).await }),
         "cashier_deposit" => {
@@ -245,7 +285,10 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             json!({ "t": "bj", "id": id, "hand": h.view(pay, msg), "balance": bal })
         }
         "crash_sub" => {
-            let c = app.crash.lock().await; let mut rx = c.tx.subscribe(); let snap = c.snapshot(); drop(c);
+            let c = app.crash.lock().await; let mut rx = c.tx.subscribe(); let mut snap = c.snapshot();
+            // A refreshed tab gets its own live bet back so it can still cash out.
+            if let Some(b) = c.bets.get(tok) { snap["me"] = json!({ "anon": b.anon, "stake": b.stake, "out": b.out, "auto": b.auto }); }
+            drop(c);
             let tx2 = tx.clone();
             if let Some(h) = crash_sub.take() { h.abort(); }
             *crash_sub = Some(tokio::spawn(async move { while let Ok(m) = rx.recv().await { if tx2.send(m).is_err() { break; } } }));
@@ -287,12 +330,14 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
                     let opp = if role == "holder" { &g.guesser.anon } else { &g.holder.anon };
                     let mut m = json!({ "t": "carrot_start", "room": room, "role": role, "you": p.anon, "opponent": opp, "stake": stake, "commitment": g.c.0 });
                     if role == "holder" { m["peek"] = json!(if g.in_holder { "carrot" } else { "empty" }); }
-                    app.notify(&p.token, m).await;
+                    m["balance"] = json!(app.ledger.lock().await.balance(&p.token).ok());
+                    app.log_reset(&p.token).await; app.log_to(&p.token, m).await;
                 }
+                app.touch(&room).await;
                 app.carrots.lock().await.insert(room, g);
                 return Ok(None);
             }
-            app.debit(tok, stake, "carrot-hold").await?; app.credit(tok, stake, "carrot-hold").await; // balance check only
+            if app.ledger.lock().await.balance(tok).map_err(lerr)? < stake { return Err("insufficient balance"); }
             q.push(Waiting { player: me, stake });
             json!({ "t": "queued", "id": id, "game": "carrot" })
         }
@@ -302,7 +347,8 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let line = LINES.get(v["line"].as_u64().unwrap_or(99) as usize).ok_or("unknown line")?;
             let rooms = app.carrots.lock().await; let g = rooms.get(v["room"].as_str().unwrap_or("")).ok_or("no room")?;
             if g.holder.token != tok { return Err("only the holder talks"); }
-            app.notify(&g.guesser.token, json!({ "t": "carrot_say", "line": line })).await;
+            app.log_to(&g.guesser.token, json!({ "t": "carrot_say", "line": line })).await;
+            app.touch(v["room"].as_str().unwrap_or("")).await;
             return Ok(None);
         }
         "carrot_choose" => {
@@ -315,7 +361,9 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let opening = g.opening(); let (h, gs) = (g.holder.clone(), g.guesser.clone());
             rooms.remove(&room); drop(rooms);
             app.credit(&w.token, pot, &format!("carrot#{room}")).await;
+            app.pvp_seen.lock().await.remove(&room);
             for p in [&h, &gs] {
+                app.log_reset(&p.token).await;
                 let bal = app.ledger.lock().await.balance(&p.token).ok();
                 app.notify(&p.token, json!({ "t": "carrot_reveal", "room": room, "swap": swap, "winner": w.anon, "you_won": w.token == p.token, "pot": pot, "opening": opening, "balance": bal })).await;
             }
@@ -332,12 +380,15 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
                 let room = rid(); let g = Liars::new(vec![other.player, me], stake);
                 let commits: Vec<Value> = g.players.iter().zip(&g.commits).map(|(p, (c, _))| json!({ "anon": p.anon, "commitment": c.0 })).collect();
                 for (i, p) in g.players.iter().enumerate() {
-                    app.notify(&p.token, json!({ "t": "liars_start", "room": room, "seat": i, "you": p.anon, "dice": g.dice[i], "salt": g.commits[i].1.salt, "commitments": commits, "turn": g.turn, "stake": stake })).await;
+                    let bal = app.ledger.lock().await.balance(&p.token).ok();
+                    app.log_reset(&p.token).await;
+                    app.log_to(&p.token, json!({ "t": "liars_start", "room": room, "seat": i, "you": p.anon, "dice": g.dice[i], "salt": g.commits[i].1.salt, "commitments": commits, "turn": g.turn, "stake": stake, "balance": bal })).await;
                 }
+                app.touch(&room).await;
                 app.liars.lock().await.insert(room, g);
                 return Ok(None);
             }
-            app.debit(tok, stake, "liars-hold").await?; app.credit(tok, stake, "liars-hold").await;
+            if app.ledger.lock().await.balance(tok).map_err(lerr)? < stake { return Err("insufficient balance"); }
             q.push(Waiting { player: me, stake });
             json!({ "t": "queued", "id": id, "game": "liars" })
         }
@@ -350,7 +401,8 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
                 let (q, f) = (v["q"].as_u64().unwrap_or(0) as u8, v["f"].as_u64().unwrap_or(0) as u8);
                 g.bid(who, q, f).map_err(|e| match e { pvp::BidError::NotYourTurn => "not your turn", pvp::BidError::NotHigher => "bid must be higher", _ => "invalid bid" })?;
                 let m = json!({ "t": "liars_bid", "room": room, "by": g.players[who].anon, "q": q, "f": f, "turn": g.turn });
-                for p in g.players.clone() { app.notify(&p.token, m.clone()).await; }
+                for p in g.players.clone() { app.log_to(&p.token, m.clone()).await; }
+                app.touch(&room).await;
                 return Ok(None);
             }
             let (wi, count) = g.call(who).map_err(|_| "cannot call now")?;
@@ -358,6 +410,8 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let (players, openings, winner, bid) = (g.players.clone(), g.openings(), g.players[wi].clone(), g.bid);
             rooms.remove(&room); drop(rooms);
             app.credit(&winner.token, pot, &format!("liars#{room}")).await;
+            app.pvp_seen.lock().await.remove(&room);
+            for p in &players { app.log_reset(&p.token).await; }
             for p in &players {
                 let bal = app.ledger.lock().await.balance(&p.token).ok();
                 app.notify(&p.token, json!({ "t": "liars_reveal", "room": room, "caller": players[who].anon, "bid": bid.map(|b| json!({"q": b.0, "f": b.1})), "count": count, "winner": winner.anon, "you_won": winner.token == p.token, "pot": pot, "openings": openings, "balance": bal })).await;

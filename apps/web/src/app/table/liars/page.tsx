@@ -105,6 +105,7 @@ export default function Liars() {
           reveal(opened, { count: m.count, winner: name(m.winner), youWon: m.you_won, caller: name(m.caller), bid: { q: m.bid.q, f: m.bid.f, by: "" } });
         }),
       ];
+      c.rpc({ t: "pvp_resume" }).catch(() => {}); // a refreshed tab picks its round back up
     });
     return () => offs.forEach(o => o());
   }, [remote]); // eslint-disable-line react-hooks/exhaustive-deps

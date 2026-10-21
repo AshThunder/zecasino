@@ -43,7 +43,8 @@ export default function Crash() {
     (async () => {
       const c = await getClient(); if (!c || !alive) return;
       type B = { anon: string; stake: number; out: number | null };
-      const fromSnap = (m: { round: number; phase: string; commitment: string; elapsed_ms: number; bet_ms: number; bettors: B[] }) => {
+      const fromSnap = (m: { round: number; phase: string; commitment: string; elapsed_ms: number; bet_ms: number; bettors: B[]; me?: B }) => {
+        if (m.me) { myAnon.current = m.me.anon; setJoined(true); setMine({ bet: m.me.stake / ZAT, out: m.me.out ? m.me.out / 100 : undefined }); m.bettors = m.bettors.filter(b => b.anon !== m.me!.anon); }
         setRound(m.round); point.current = { crash: null, nonce: m.round, seed: m.commitment };
         setTable(m.bettors.map(b => ({ id: b.anon, bet: b.stake / ZAT, target: 0, out: b.out ? b.out / 100 : undefined })));
         if (m.phase === "betting") { offset.current = 0; setPhase("betting"); setCount(Math.ceil((m.bet_ms - m.elapsed_ms) / 1000)); }
@@ -195,7 +196,7 @@ export default function Crash() {
       </div>
       <HouseFair seat={seat} game="crash" bets={remote ? [] : hist}
         extra={remote ? <div className="verify"><dt>Round seeds (checked in your browser)</dt>{checked.length === 0 && <p>Waiting for the first bust…</p>}
-          {checked.map(c => <div key={c.round} className="vrow mono"><span>#{c.round}</span><span>{c.bust.toFixed(2)}×</span><b className={c.ok ? "ok" : "bad"}>{c.ok ? "✓ match" : "✗ mismatch"}</b></div>)}</div> : undefined} fmt={o => `${(Number(o) / 100).toFixed(2)}×`} formula="h = first 4 bytes of HMAC-SHA256(server seed, “client seed:nonce:0”). 1 in 100 rounds bust instantly; otherwise bust = ⌊(100·2³² − h) / (2³² − h)⌋ / 100." />
+          {checked.map(c => <div key={c.round} className="vrow mono"><span>#{c.round}</span><span>{c.bust.toFixed(2)}×</span><b className={c.ok ? "ok" : "bad"}>{c.ok ? "✓ match" : "✗ mismatch"}</b></div>)}</div> : undefined} fmt={o => `${(Number(o) / 100).toFixed(2)}×`} formula="h = first 4 bytes of HMAC-SHA256(server seed, “client seed:nonce:0”). 1 in 100 rounds bust instantly; otherwise bust = ⌊(100·2³² − h) / (2³² − h)⌋ / 100, capped at 1000×." />
     </div>
   );
 }

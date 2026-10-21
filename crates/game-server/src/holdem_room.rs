@@ -4,18 +4,45 @@ use serde_json::{json, Value};
 use zecasino_mental_poker as mp;
 use crate::{holdem::{self, Act, Hand, Phase, Step, BB, HOUSE}, pvp::{self, Player}, App};
 
-pub struct Room { pub id: String, pub players: [Player; 2], pub stacks: [u64; 2], pub button: usize, pub hand: Option<Hand>, pub hand_no: u64, pub closed: bool, pub progress: u64 }
+pub struct Room { pub id: String, pub players: [Player; 2], pub stacks: [u64; 2], pub button: usize, pub hand: Option<Hand>, pub hand_no: u64, pub closed: bool, pub progress: u64, pub seated: [Value; 2] }
 
 fn hexpt(p: &curve25519_dalek::ristretto::RistrettoPoint) -> String { hex::encode(p.compress().as_bytes()) }
 
 impl App {
-    async fn to_seat(&self, r: &Room, seat: usize, v: Value) { self.notify(&r.players[seat].token, v).await; }
+    /// Everything except requests is kept for replay; requests are re-derived from state on resume.
+    async fn to_seat(&self, r: &Room, seat: usize, v: Value) {
+        let t = v["t"].as_str().unwrap_or("");
+        if t.ends_with("_req") || t == "hm_state" || t == "hm_closed" { self.notify(&r.players[seat].token, v).await; } else { self.log_to(&r.players[seat].token, v).await; }
+    }
+
+    /// Re-sends a refreshed tab its table: the seat, this hand's messages, any request it owes, the state.
+    pub(crate) async fn hm_resume(&self, tok: &str, tx: &crate::Tx) -> bool {
+        let rooms = self.holdems.lock().await;
+        let Some(r) = rooms.values().find(|r| r.players.iter().any(|p| p.token == tok)) else { return false };
+        let seat = r.players.iter().position(|p| p.token == tok).unwrap();
+        let send = |mut m: Value| { m["replay"] = json!(true); let _ = tx.send(m.to_string()); };
+        send(r.seated[seat].clone());
+        for m in self.replay.lock().await.get(tok).cloned().unwrap_or_default() { send(m); }
+        let Some(h) = &r.hand else { return true };
+        match h.phase {
+            Phase::Keys if h.pks[seat].is_none() => send(json!({ "t": "hm_key_req", "room": r.id })),
+            Phase::Shuffle(s) if s == seat => send(json!({ "t": "hm_shuffle_req", "room": r.id, "deck": h.deck })),
+            Phase::HoleShares | Phase::Board | Phase::Showdown => if let Some((_, p)) = h.pending.iter().find(|p| p.0 == seat) { send(json!({ "t": "hm_share_req", "room": r.id, "positions": p })) },
+            _ => {}
+        }
+        if h.phase == Phase::Betting { let mut m = Self::state_msg(r, h, seat); m["act_ms"] = json!(self.hm_act_ms.load(Ordering::Relaxed)); send(m); }
+        true
+    }
     async fn to_both(&self, r: &Room, v: Value) { for s in 0..2 { self.to_seat(r, s, v.clone()).await; } }
 
     pub(crate) async fn hm_new_room(self: &Arc<Self>, a: Player, b: Player, buy_in: u64) {
         let id = crate::rid();
-        let room = Room { id: id.clone(), players: [a, b], stacks: [buy_in; 2], button: 0, hand: None, hand_no: 0, closed: false, progress: 0 };
-        for s in 0..2 { self.to_seat(&room, s, json!({ "t": "hm_seated", "room": id, "seat": s, "you": room.players[s].anon, "opponent": room.players[1 - s].anon, "stacks": room.stacks, "blinds": [holdem::SB, BB] })).await; }
+        let mut room = Room { id: id.clone(), players: [a, b], stacks: [buy_in; 2], button: 0, hand: None, hand_no: 0, closed: false, progress: 0, seated: [Value::Null, Value::Null] };
+        for s in 0..2 {
+            let bal = self.ledger.lock().await.balance(&room.players[s].token).ok();
+            room.seated[s] = json!({ "t": "hm_seated", "room": id, "seat": s, "you": room.players[s].anon, "opponent": room.players[1 - s].anon, "stacks": room.stacks, "blinds": [holdem::SB, BB], "balance": bal });
+            self.notify(&room.players[s].token, room.seated[s].clone()).await;
+        }
         self.holdems.lock().await.insert(id.clone(), room);
         tokio::spawn(self.clone().hm_watchdog(id.clone()));
         self.hm_start_hand(&id).await;
@@ -29,6 +56,7 @@ impl App {
         r.progress += 1;
         r.hand_no += 1; if r.hand_no > 1 { r.button = 1 - r.button; }
         r.hand = Some(Hand::new(r.hand_no, r.stacks, r.button));
+        for p in &r.players { self.log_reset(&p.token).await; }
         let v = json!({ "t": "hm_hand", "room": id, "hand": r.hand_no, "button": r.button, "stacks": r.stacks });
         self.to_both(r, v).await;
         self.to_both(r, json!({ "t": "hm_key_req", "room": id })).await;
@@ -37,6 +65,7 @@ impl App {
     pub(crate) async fn hm_close(self: &Arc<Self>, id: &str, why: &str) {
         let Some(mut r) = self.holdems.lock().await.remove(id) else { return };
         r.closed = true;
+        for p in &r.players { self.log_reset(&p.token).await; }
         // Room stacks only change when a hand settles, so an abandoned hand is refunded by
         // paying out the stacks as they stood when it started (blinds and bets included).
         for s in 0..2 {

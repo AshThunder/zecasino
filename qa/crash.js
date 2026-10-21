@@ -17,7 +17,9 @@ const q = require("./lib");
   record("Crash", "manual cash-out round", true, manual);
   // auto cash-out at 1.01x
   await auto.fill("1.01"); await waitBetting(); await p.getByRole("button", { name: "Bet next round" }).click();
-  await p.waitForTimeout(12000);
+  const before = q.ledger(s.token).entries; let added = 0;
+  for (let i = 0; i < 40 && added < 2; i++) { await p.waitForTimeout(1000); added = q.ledger(s.token).entries - before; }
+  record("Crash", "auto cash-out at 1.01× settled", added >= 2, `${added} ledger entries (bet + payout) for the round`);
   // refresh mid-round with a live bet
   await auto.fill("1"); await waitBetting(); await p.getByRole("button", { name: "Bet next round" }).click();
   await cash.waitFor({ timeout: 20000 }).catch(() => {});
@@ -26,12 +28,12 @@ const q = require("./lib");
   record("Crash", "refresh mid-round keeps cash-out button", resumed);
   if (resumed) await cash.click().catch(() => {});
   // let rounds finish, then verify
-  await p.waitForTimeout(15000);
+  await p.locator(".fair .vrow").first().waitFor({ timeout: 90000 }).catch(() => {});
   const okRows = await p.locator(".fair .ok, .fair b.ok, .vrow b.ok").count(); const bad = await p.locator(".fair .bad").count();
-  console.log(await p.locator(".fair").innerText());
+  
   record("Crash", "every finished round verified in browser", okRows > 0 && bad === 0, `${okRows} ✓ ${bad} ✗`);
   record("Crash", "ledger reconcile", await q.reconcile(s, "crash"));
-  const r = await q.probe(s, { t: "crash_bet", stake: q.ledger(s.token).balance + 1000 });
+  await waitBetting(); const r = await q.probe(s, { t: "crash_bet", stake: q.ledger(s.token).balance + 1000 });
   record("Crash", "bet > balance rejected", r.t === "error", r.error);
   await br.close();
 })();

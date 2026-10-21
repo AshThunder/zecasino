@@ -66,6 +66,7 @@ export default function CarrotTable() {
         c.on("carrot_say", m => { setSaid(m.line); setPhase("decide"); play("chip", 0.3); }),
         c.on("carrot_reveal", async m => { setSwap(m.swap); await openSeal(m.opening); setTimeout(() => setPhase("reveal"), m.swap ? 900 : 300); play("stack", 0.6); }),
       ];
+      c.rpc({ t: "pvp_resume" }).catch(() => {}); // a refreshed tab picks its round back up
     });
     return () => offs.forEach(f => f());
   }, [remote]); // eslint-disable-line react-hooks/exhaustive-deps

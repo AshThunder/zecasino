@@ -6,8 +6,10 @@ use zecasino_fairness::{commit::{self, Commitment, Opening}, games, verify_serve
 type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn server() -> String { server_with(30_000, 20_000).await }
-async fn server_with(act_ms: u64, proto_ms: u64) -> String {
+async fn server_with(act_ms: u64, proto_ms: u64) -> String { server_full(act_ms, proto_ms, 60_000).await }
+async fn server_full(act_ms: u64, proto_ms: u64, pvp_idle_ms: u64) -> String {
     let app = zecasino_game_server::App::new(":memory:", true);
+    app.pvp_idle_ms.store(pvp_idle_ms, std::sync::atomic::Ordering::Relaxed);
     app.hm_act_ms.store(act_ms, std::sync::atomic::Ordering::Relaxed);
     app.hm_proto_ms.store(proto_ms, std::sync::atomic::Ordering::Relaxed);
     tokio::spawn(zecasino_game_server::crash::run(app.clone()));
@@ -293,4 +295,24 @@ async fn solvency_inclusion_proof() {
     let path: Vec<Step> = p["path"].as_array().unwrap().iter().map(|s| Step { side: if s["side"] == "left" { "left" } else { "right" }, node: node(&s["node"]) }).collect();
     let salt: [u8; 32] = hex::decode(p["salt"].as_str().unwrap()).unwrap().try_into().unwrap();
     assert!(verify(&salt, 12_345_678, &path, &node(&p["root"])));
+}
+
+#[tokio::test]
+async fn liars_stall_is_auto_played_and_refresh_replays() {
+    let url = server_full(30_000, 20_000, 1_200).await;
+    let (mut a, _) = client(&url, 50_000_000).await;
+    let (mut b, sb) = client(&url, 50_000_000).await;
+    send(&mut a, json!({ "t": "liars_join", "stake": 5_000_000 })).await; until(&mut a, "queued").await;
+    send(&mut b, json!({ "t": "liars_join", "stake": 5_000_000 })).await;
+    let start = until(&mut b, "liars_start").await;
+    assert!(start["balance"].as_u64().is_some(), "start carries the debited balance");
+    // B "refreshes": a new socket with the same token gets the round replayed.
+    let (mut b2, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    send(&mut b2, json!({ "t": "hello", "token": sb["token"], "id": 1 })).await; until(&mut b2, "session").await;
+    send(&mut b2, json!({ "t": "pvp_resume", "id": 2 })).await;
+    let r = until(&mut b2, "liars_start").await;
+    assert_eq!(r["replay"], true); assert_eq!(r["dice"], start["dice"]);
+    // Nobody moves: the sweeper bids for the opener, then calls for the other player.
+    let rev = until(&mut a, "liars_reveal").await;
+    assert!(rev["count"].as_u64().is_some());
 }
