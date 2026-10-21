@@ -219,6 +219,20 @@ mod holdem_e2e {
     }
 
     #[tokio::test]
+    async fn house_player_plays_holdem_and_cannot_see_hole_cards() {
+        let url = server().await;
+        let (mut a, _) = client(&url, 100_000_000).await;
+        send(&mut a, json!({ "t": "holdem_join", "stake": 40_000_000, "house": true })).await;
+        let mut b = Bot { w: a, sk: mp::SecretKey::generate(), seat: 9, room: String::new(), deck: vec![], hole: vec![], pks: vec![], stall: "" };
+        let seated = loop { let m = pump(&mut b).await; if m["t"] == "hm_seated" { break m; } };
+        assert_eq!(seated["opponent"], "house"); assert_eq!(seated["opponent_house"], true);
+        let r = loop { let m = pump(&mut b).await; if m["t"] == "hm_result" { break m; } if m["t"] == "error" { panic!("{m}"); } };
+        let stacks: Vec<u64> = serde_json::from_value(r["stacks"].clone()).unwrap();
+        assert_eq!(stacks[0] + stacks[1] + r["rake"].as_u64().unwrap(), 80_000_000);
+        assert_eq!(b.hole.len(), 2, "player opened its own hole cards with the house's shares");
+    }
+
+    #[tokio::test]
     async fn stalled_action_auto_folds() {
         let url = server_with(1_500, 20_000).await;
         let (mut b0, mut b1) = table(&url, "act").await;

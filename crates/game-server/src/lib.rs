@@ -9,6 +9,7 @@ pub mod solvency;
 pub mod house;
 pub mod ledger;
 pub mod pvp;
+pub mod house_bot;
 
 use std::{collections::HashMap, sync::Arc};
 use axum::{extract::{State, ws::{Message, WebSocket, WebSocketUpgrade}}, response::IntoResponse, routing::get, Json, Router};
@@ -27,7 +28,13 @@ pub const MAX_STAKE: u64 = 50_000_000; // 0.5 TAZ
 /// Play chips every demo session starts with (and refills to).
 pub const DEMO_CHIPS: u64 = 500_000_000;
 
-pub struct Waiting { pub player: Player, pub stake: u64 }
+/// A seat in a wait queue. `code` is set for a private invite table: only a join with that code matches it.
+pub struct Waiting { pub player: Player, pub stake: u64, pub code: Option<String> }
+/// The pairing of a finished table, kept briefly so both sides can ask for a rematch.
+pub struct Rematch { pub game: &'static str, pub players: Vec<Player>, pub stake: u64, pub at: std::time::Instant, pub want: Vec<String> }
+/// How long a dropped player's seat is held before their turn may be auto-played.
+pub const GRACE_MS: u64 = 30_000;
+fn invite_code() -> String { const A: &[u8] = b"23456789ABCDEFGHJKMNPQRSTVWXYZ"; let mut b = [0u8; 6]; rand::rngs::OsRng.fill_bytes(&mut b); b.iter().map(|x| A[*x as usize % A.len()] as char).collect() }
 
 pub struct App {
     pub ledger: Mutex<Ledger>,
@@ -51,6 +58,12 @@ pub struct App {
     /// Per-session messages of the round in progress, replayed to a refreshed tab.
     pub(crate) replay: Mutex<HashMap<String, Vec<Value>>>,
     pvp_seen: Mutex<HashMap<String, std::time::Instant>>,
+    /// Sessions whose last tab dropped while seated, and when.
+    away: Mutex<HashMap<String, std::time::Instant>>,
+    rematch: Mutex<HashMap<String, Rematch>>,
+    /// Carrot rooms where the house is the guesser: its committed keep/swap decision.
+    house_carrot: Mutex<HashMap<String, (bool, zecasino_fairness::commit::Opening, String)>>,
+    pub grace_ms: std::sync::atomic::AtomicU64,
     pub hm_proto_ms: std::sync::atomic::AtomicU64,
     pub dev_credit: bool,
     /// Demo instance: its own database, no cashier, every session starts with play chips. Never the real ledger.
@@ -72,7 +85,7 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(ledger), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new(first_round)), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), anchor: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, demo: false, zec: cashier::Zec::from_env(),
+            liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), anchor: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), away: Default::default(), rematch: Default::default(), house_carrot: Default::default(), grace_ms: GRACE_MS.into(), hm_proto_ms: 20_000.into(), dev_credit, demo: false, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
@@ -94,13 +107,121 @@ impl App {
         let hand = self.hands.lock().await.get(token).filter(|h| !h.done).and_then(|h| serde_json::to_string(h).ok());
         if let Some(seat) = seat { self.ledger.lock().await.save_seat(token, &seat, hand.as_deref()); }
     }
+    pub(crate) async fn attach(&self, token: &str, tx: Tx) { self.conns.lock().await.entry(token.to_owned()).or_default().push(tx); }
+    pub(crate) async fn detach(&self, token: &str) { self.conns.lock().await.remove(token); self.replay.lock().await.remove(token); }
+    /// The house's side of a PvP pot is house bankroll, not a session: no ledger row, so the human's
+    /// "bet" / "payout" rows alone move house P&L by exactly the house's result, and liabilities are untouched.
     async fn debit(&self, token: &str, stake: u64, r: &str) -> Result<u64, &'static str> {
         if stake == 0 || stake > MAX_STAKE { return Err("stake out of range"); }
+        if house_bot::is_house(token) { return Ok(0); }
         self.ledger.lock().await.apply(token, -(stake as i64), "bet", r).map_err(lerr)
     }
     async fn credit(&self, token: &str, amt: u64, r: &str) -> u64 {
+        if house_bot::is_house(token) { return 0; }
         let mut l = self.ledger.lock().await;
         if amt > 0 { l.apply(token, amt as i64, "payout", r).unwrap() } else { l.balance(token).unwrap() }
+    }
+}
+
+impl App {
+    fn queue(&self, game: &str) -> &Mutex<Vec<Waiting>> { match game { "carrot" => &self.carrot_wait, "liars" => &self.liars_wait, _ => &self.holdem_wait } }
+    fn turn_ms(&self) -> u64 { self.pvp_idle_ms.load(std::sync::atomic::Ordering::Relaxed) }
+
+    /// Seats two players at a fresh table: escrows both stakes (the house's side is bankroll) and deals.
+    pub(crate) async fn start_match(self: &Arc<Self>, game: &str, players: Vec<Player>, stake: u64) -> Result<(), &'static str> {
+        let kind = if game == "holdem" { "holdem-buyin" } else { game };
+        for p in &players { self.queue(game).lock().await.retain(|w| w.player.token != p.token); }
+        self.debit(&players[1].token, stake, kind).await?;
+        if self.debit(&players[0].token, stake, kind).await.is_err() { self.credit(&players[1].token, stake, &format!("{game}-refund")).await; return Err("opponent left"); }
+        let mut it = players.into_iter(); let (a, b) = (it.next().unwrap(), it.next().unwrap());
+        match game {
+            "carrot" => self.start_carrot(a, b, stake).await,
+            "liars" => self.start_liars(a, b, stake).await,
+            _ => {
+                for p in [&a, &b] { if house_bot::is_house(&p.token) {
+                    let (tx, rx) = mpsc::unbounded_channel(); self.attach(&p.token, tx).await;
+                    tokio::spawn(house_bot::holdem_bot(self.clone(), p.token.clone(), rx));
+                } }
+                self.hm_new_room(a, b, stake).await;
+            }
+        }
+        Ok(())
+    }
+
+    async fn start_carrot(self: &Arc<Self>, a: Player, b: Player, stake: u64) {
+        let room = rid(); let g = Carrot::new(a, b, stake);
+        let house_guesses = house_bot::is_house(&g.guesser.token);
+        // The house's keep/swap is decided and sealed now, before the holder peeks or says anything.
+        let hc = house_guesses.then(|| { let swap = rand::rngs::OsRng.next_u32() & 1 == 1; let (c, o) = zecasino_fairness::commit::commit(if swap { b"carrot:house-swap" } else { b"carrot:house-keep" }); (swap, o, c.0) });
+        for (p, role) in [(&g.holder, "holder"), (&g.guesser, "guesser")] {
+            let opp = if role == "holder" { &g.guesser } else { &g.holder };
+            let mut m = json!({ "t": "carrot_start", "room": room, "role": role, "you": p.anon, "opponent": opp.anon, "opponent_house": house_bot::is_house(&opp.token), "stake": stake, "commitment": g.c.0, "turn_ms": self.turn_ms() });
+            if role == "holder" { m["peek"] = json!(if g.in_holder { "carrot" } else { "empty" }); }
+            if let Some((_, _, c)) = &hc { m["house_commitment"] = json!(c); }
+            m["balance"] = json!(self.ledger.lock().await.balance(&p.token).ok());
+            self.log_reset(&p.token).await; self.log_to(&p.token, m).await;
+        }
+        let (hold, guess) = (g.holder.token.clone(), g.guesser.token.clone());
+        self.touch(&room).await;
+        self.carrots.lock().await.insert(room.clone(), g);
+        if let Some((swap, o, c)) = hc {
+            self.house_carrot.lock().await.insert(room.clone(), (swap, o, c));
+            let app = self.clone();
+            tokio::spawn(async move { tokio::time::sleep(std::time::Duration::from_millis(6_000)).await; app.house_act(guess, json!({ "t": "carrot_choose", "room": room, "swap": swap })).await; });
+        } else if house_bot::is_house(&hold) {
+            let app = self.clone(); let line = rand::rngs::OsRng.next_u32() % 4;
+            tokio::spawn(async move { tokio::time::sleep(std::time::Duration::from_millis(2_500)).await; app.house_act(hold, json!({ "t": "carrot_say", "room": room, "line": line })).await; });
+        }
+    }
+
+    async fn start_liars(self: &Arc<Self>, a: Player, b: Player, stake: u64) {
+        let room = rid(); let g = Liars::new(vec![a, b], stake);
+        let commits: Vec<Value> = g.players.iter().zip(&g.commits).map(|(p, (c, _))| json!({ "anon": p.anon, "commitment": c.0, "house": house_bot::is_house(&p.token) })).collect();
+        for (i, p) in g.players.iter().enumerate() {
+            let bal = self.ledger.lock().await.balance(&p.token).ok();
+            let opp = &g.players[1 - i];
+            self.log_reset(&p.token).await;
+            self.log_to(&p.token, json!({ "t": "liars_start", "room": room, "seat": i, "you": p.anon, "opponent": opp.anon, "opponent_house": house_bot::is_house(&opp.token), "dice": g.dice[i], "salt": g.commits[i].1.salt, "commitments": commits, "turn": g.turn, "stake": stake, "balance": bal, "turn_ms": self.turn_ms() })).await;
+        }
+        self.touch(&room).await;
+        self.liars.lock().await.insert(room.clone(), g);
+        self.liars_house_turn(&room).await;
+    }
+
+    /// If the house is to move, it moves after a short pause, from its own dice and the public bid only.
+    async fn liars_house_turn(self: &Arc<Self>, room: &str) {
+        let Some((tok, own, bid, total)) = self.liars.lock().await.get(room).filter(|g| house_bot::is_house(&g.players[g.turn].token)).map(|g| (g.players[g.turn].token.clone(), g.dice[g.turn], g.bid.map(|b| (b.0, b.1)), (g.players.len() * 5) as u8)) else { return };
+        let (app, room) = (self.clone(), room.to_owned());
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(1_600)).await;
+            let msg = match house_bot::liars_move(&own, bid, total) { Some((q, f)) => json!({ "t": "liars_bid", "room": room, "q": q, "f": f }), None => json!({ "t": "liars_call", "room": room }) };
+            app.house_act(tok, msg).await;
+        });
+    }
+
+    /// A house move goes through the same handler (and the same checks) as a player's message.
+    fn house_act(self: Arc<Self>, tok: String, msg: Value) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            let (dummy, _rx) = mpsc::unbounded_channel::<String>();
+            let t = msg["t"].as_str().unwrap_or("").to_owned();
+            if let Err(e) = handle(&self, &tok, &t, &msg, &Value::Null, &dummy, &mut None).await { tracing::debug!(e, "house move rejected"); }
+        })
+    }
+
+    /// Tells everyone sharing a table with `tok` that it dropped or came back.
+    async fn presence(&self, tok: &str, online: bool) {
+        let mut opp: Vec<(String, String)> = vec![];
+        for (r, g) in self.carrots.lock().await.iter() { if g.holder.token == tok { opp.push((r.clone(), g.guesser.token.clone())); } if g.guesser.token == tok { opp.push((r.clone(), g.holder.token.clone())); } }
+        for (r, g) in self.liars.lock().await.iter() { if g.players.iter().any(|p| p.token == tok) { for p in &g.players { if p.token != tok { opp.push((r.clone(), p.token.clone())); } } } }
+        for (r, g) in self.holdems.lock().await.iter() { if g.players.iter().any(|p| p.token == tok) { for p in &g.players { if p.token != tok { opp.push((r.clone(), p.token.clone())); } } } }
+        let grace = self.grace_ms.load(std::sync::atomic::Ordering::Relaxed);
+        for (room, o) in opp { self.notify(&o, json!({ "t": "pvp_presence", "room": room, "online": online, "grace_ms": grace })).await; }
+    }
+
+    pub(crate) async fn keep_rematch(&self, room: &str, game: &'static str, players: Vec<Player>, stake: u64) {
+        let mut m = self.rematch.lock().await;
+        m.retain(|_, r| r.at.elapsed() < std::time::Duration::from_secs(120));
+        m.insert(room.to_owned(), Rematch { game, players, stake, at: std::time::Instant::now(), want: vec![] });
     }
 }
 
@@ -159,10 +280,13 @@ async fn lobby(State(app): State<Arc<App>>) -> Json<Value> {
     // Coverage = cold reserve (checkable with its public viewing key) / liabilities, same as /solvency. Hot wallet reported separately.
     let a = app.anchor.lock().await.clone();
     let c = app.crash.lock().await; let crash_round = c.round; let crash_bettors = c.bets.len(); drop(c);
+    // Public queue only: private invite tables are not listed.
+    let by = |q: &Vec<Waiting>| { let mut m = serde_json::Map::new(); for w in q.iter().filter(|w| w.code.is_none()) { let e = m.entry(w.stake.to_string()).or_insert(json!(0)); *e = json!(e.as_u64().unwrap_or(0) + 1); } Value::Object(m) };
+    let (cw, lw, hw) = { let a = app.carrot_wait.lock().await; let b = app.liars_wait.lock().await; let c = app.holdem_wait.lock().await; ((a.iter().filter(|w| w.code.is_none()).count(), by(&a)), (b.iter().filter(|w| w.code.is_none()).count(), by(&b)), (c.iter().filter(|w| w.code.is_none()).count(), by(&c))) };
     let tables = json!({
-        "carrot": { "rooms": app.carrots.lock().await.len(), "waiting": app.carrot_wait.lock().await.len() },
-        "liars": { "rooms": app.liars.lock().await.len(), "waiting": app.liars_wait.lock().await.len() },
-        "holdem": { "rooms": app.holdems.lock().await.len(), "waiting": app.holdem_wait.lock().await.len() },
+        "carrot": { "rooms": app.carrots.lock().await.len(), "waiting": cw.0, "by_stake": cw.1 },
+        "liars": { "rooms": app.liars.lock().await.len(), "waiting": lw.0, "by_stake": lw.1 },
+        "holdem": { "rooms": app.holdems.lock().await.len(), "waiting": hw.0, "by_stake": hw.1 },
         "crash": { "round": crash_round, "bettors": crash_bettors },
     });
     Json(json!({ "demo": app.demo, "liabilities_zat": liab, "reserve_zat": reserve, "hot_zat": hot,
@@ -211,6 +335,7 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
             if !seats.contains_key(&tok) { match SeedPair::generate(cs) { Ok(p) => { seats.insert(tok.clone(), p); } Err(_) => { seats.insert(tok.clone(), SeedPair::generate("zecasino").unwrap()); } } }
             drop(seats);
             app.conns.lock().await.entry(tok.clone()).or_default().push(tx.clone());
+            if app.away.lock().await.remove(&tok).is_some() { app.presence(&tok, true).await; }
             let bal = app.ledger.lock().await.balance(&tok).unwrap();
             let _ = tx.send(json!({ "t": "session", "id": id, "token": tok, "balance": bal, "demo": app.demo, "dev_credit": app.dev_credit, "seat": app.seat_view(&tok).await }).to_string());
             token = Some(tok);
@@ -222,7 +347,9 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
         if let Some(r) = reply { let _ = tx.send(r.to_string()); }
     }
     if let Some(h) = crash_sub { h.abort(); }
-    if let Some(tok) = token { if let Some(l) = app.conns.lock().await.get_mut(&tok) { l.retain(|x| !x.same_channel(&tx)); } 
+    if let Some(tok) = token {
+        let gone = { let mut c = app.conns.lock().await; match c.get_mut(&tok) { Some(l) => { l.retain(|x| !x.same_channel(&tx)); l.is_empty() } None => true } };
+        if gone { app.away.lock().await.insert(tok.clone(), std::time::Instant::now()); app.presence(&tok, false).await; }
         app.carrot_wait.lock().await.retain(|w| w.player.token != tok); app.liars_wait.lock().await.retain(|w| w.player.token != tok); app.holdem_wait.lock().await.retain(|w| w.player.token != tok); }
     writer.abort();
 }
@@ -242,6 +369,9 @@ pub async fn pvp_sweeper(app: Arc<App>) {
                     Some((tok, if g.bid.is_some() { json!({ "t": "liars_call", "room": room }) } else { json!({ "t": "liars_bid", "room": room, "q": 1, "f": g.dice[g.turn][0] }) }))
                 } else { None };
             let Some((tok, msg)) = mv else { app.pvp_seen.lock().await.remove(&room); continue };
+            // A dropped player keeps their seat for the grace period even if the turn clock ran out.
+            let grace = app.grace_ms.load(std::sync::atomic::Ordering::Relaxed) as u128;
+            if app.away.lock().await.get(&tok).is_some_and(|t| t.elapsed().as_millis() < grace) { continue; }
             app.touch(&room).await;
             let (dummy, _rx) = mpsc::unbounded_channel::<String>();
             let t = msg["t"].as_str().unwrap().to_owned();
@@ -409,29 +539,59 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let bal = app.ledger.lock().await.crash_cash(tok, amt, round);
             json!({ "t": "crash_cashed", "id": id, "mult": m, "payout": amt, "balance": bal })
         }
-        "carrot_join" => {
+        "carrot_join" | "liars_join" | "holdem_join" => {
+            let game: &'static str = match t { "carrot_join" => "carrot", "liars_join" => "liars", _ => "holdem" };
             let me = Player { token: tok.to_owned(), anon: anon() };
-            let mut q = app.carrot_wait.lock().await;
+            let code = v["code"].as_str().map(|c| c.trim().to_uppercase()).filter(|c| !c.is_empty());
+            let range = |s: u64| if game == "holdem" { (20 * holdem::BB..=MAX_STAKE).contains(&s) } else { (1..=MAX_STAKE).contains(&s) };
+            if code.is_none() && !range(stake) { return Err(if game == "holdem" { "buy-in must be 0.2 to 0.5 TAZ" } else { "stake out of range" }); }
+            let mut q = app.queue(game).lock().await;
+            // "Play the house instead": the casino takes the other seat, clearly labelled as the house.
+            if v["house"].as_bool() == Some(true) {
+                q.retain(|w| w.player.token != tok); drop(q);
+                app.start_match(game, vec![house_bot::house_player(), me], stake).await?;
+                return Ok(None);
+            }
             if q.iter().any(|w| w.player.token == tok) { return Err("already queued"); }
-            if let Some(i) = q.iter().position(|w| w.stake == stake) {
+            let invite = v["invite"].as_bool() == Some(true);
+            let found = match &code {
+                Some(c) => Some(q.iter().position(|w| w.code.as_deref() == Some(c.as_str())).ok_or("that invite has expired or was already used")?),
+                None if invite => None,
+                None => q.iter().position(|w| w.code.is_none() && w.stake == stake),
+            };
+            if let Some(i) = found {
                 let other = q.remove(i); drop(q);
-                app.debit(tok, stake, "carrot").await?;
-                if app.debit(&other.player.token, stake, "carrot").await.is_err() { app.credit(tok, stake, "carrot-refund").await; return Err("opponent left"); }
-                let room = rid(); let g = Carrot::new(other.player, me, stake);
-                for (p, role) in [(&g.holder, "holder"), (&g.guesser, "guesser")] {
-                    let opp = if role == "holder" { &g.guesser.anon } else { &g.holder.anon };
-                    let mut m = json!({ "t": "carrot_start", "room": room, "role": role, "you": p.anon, "opponent": opp, "stake": stake, "commitment": g.c.0 });
-                    if role == "holder" { m["peek"] = json!(if g.in_holder { "carrot" } else { "empty" }); }
-                    m["balance"] = json!(app.ledger.lock().await.balance(&p.token).ok());
-                    app.log_reset(&p.token).await; app.log_to(&p.token, m).await;
+                let stake = other.stake; let host = other.player.clone();
+                if let Err(e) = app.start_match(game, vec![other.player, me], stake).await {
+                    if e == "opponent left" { app.notify(&host.token, json!({ "t": "error", "error": "your opponent could not cover the stake" })).await; }
+                    return Err(e);
                 }
-                app.touch(&room).await;
-                app.carrots.lock().await.insert(room, g);
                 return Ok(None);
             }
             if app.ledger.lock().await.balance(tok).map_err(lerr)? < stake { return Err("insufficient balance"); }
-            q.push(Waiting { player: me, stake });
-            json!({ "t": "queued", "id": id, "game": "carrot" })
+            let code = invite.then(invite_code);
+            q.push(Waiting { player: me, stake, code: code.clone() });
+            json!({ "t": "queued", "id": id, "game": game, "stake": stake, "code": code })
+        }
+        "queue_leave" => {
+            for g in ["carrot", "liars", "holdem"] { app.queue(g).lock().await.retain(|w| w.player.token != tok); }
+            json!({ "t": "queue_left", "id": id })
+        }
+        "pvp_rematch" => {
+            let room = v["room"].as_str().unwrap_or("").to_owned();
+            let mut m = app.rematch.lock().await;
+            let r = m.get_mut(&room).filter(|r| r.at.elapsed() < std::time::Duration::from_secs(120)).ok_or("rematch expired")?;
+            if !r.players.iter().any(|p| p.token == tok) { return Err("not your table"); }
+            if !r.want.iter().any(|w| w == tok) { r.want.push(tok.to_owned()); }
+            if r.players.iter().all(|p| house_bot::is_house(&p.token) || r.want.contains(&p.token)) {
+                let r = m.remove(&room).unwrap(); drop(m);
+                let players = r.players.into_iter().map(|p| if house_bot::is_house(&p.token) { house_bot::house_player() } else { Player { token: p.token, anon: anon() } }).collect();
+                app.start_match(r.game, players, r.stake).await?;
+                return Ok(None);
+            }
+            let others: Vec<String> = r.players.iter().filter(|p| p.token != tok).map(|p| p.token.clone()).collect(); drop(m);
+            for o in others { app.notify(&o, json!({ "t": "pvp_rematch_offer", "room": room })).await; }
+            json!({ "t": "rematch_wait", "id": id, "room": room })
         }
         "carrot_say" => {
             // Same lines as apps/web/src/app/table/carrot/page.tsx; free text is not allowed (no chat to moderate, nothing identifying).
@@ -439,7 +599,7 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let line = LINES.get(v["line"].as_u64().unwrap_or(99) as usize).ok_or("unknown line")?;
             let rooms = app.carrots.lock().await; let g = rooms.get(v["room"].as_str().unwrap_or("")).ok_or("no room")?;
             if g.holder.token != tok { return Err("only the holder talks"); }
-            app.log_to(&g.guesser.token, json!({ "t": "carrot_say", "line": line })).await;
+            app.log_to(&g.guesser.token, json!({ "t": "carrot_say", "line": line, "turn_ms": app.turn_ms() })).await;
             app.touch(v["room"].as_str().unwrap_or("")).await;
             return Ok(None);
         }
@@ -451,38 +611,18 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let swap = v["swap"].as_bool().unwrap_or(false);
             let w = g.resolve(swap).clone(); let pot = pvp::pot_after_rake(g.stake * 2);
             let opening = g.opening(); let (h, gs) = (g.holder.clone(), g.guesser.clone());
+            let stake = g.stake;
             rooms.remove(&room); drop(rooms);
             app.credit(&w.token, pot, &format!("carrot#{room}")).await;
             app.pvp_seen.lock().await.remove(&room);
+            let house = app.house_carrot.lock().await.remove(&room).map(|(_, o, c)| json!({ "commitment": c, "value": String::from_utf8_lossy(&o.value), "salt": o.salt }));
+            app.keep_rematch(&room, "carrot", vec![h.clone(), gs.clone()], stake).await;
             for p in [&h, &gs] {
                 app.log_reset(&p.token).await;
                 let bal = app.ledger.lock().await.balance(&p.token).ok();
-                app.notify(&p.token, json!({ "t": "carrot_reveal", "room": room, "swap": swap, "winner": w.anon, "you_won": w.token == p.token, "pot": pot, "opening": opening, "balance": bal })).await;
+                app.notify(&p.token, json!({ "t": "carrot_reveal", "room": room, "swap": swap, "winner": w.anon, "you_won": w.token == p.token, "pot": pot, "opening": opening, "house_decision": house, "balance": bal })).await;
             }
             return Ok(None);
-        }
-        "liars_join" => {
-            let me = Player { token: tok.to_owned(), anon: anon() };
-            let mut q = app.liars_wait.lock().await;
-            if q.iter().any(|w| w.player.token == tok) { return Err("already queued"); }
-            if let Some(i) = q.iter().position(|w| w.stake == stake) {
-                let other = q.remove(i); drop(q);
-                app.debit(tok, stake, "liars").await?;
-                if app.debit(&other.player.token, stake, "liars").await.is_err() { app.credit(tok, stake, "liars-refund").await; return Err("opponent left"); }
-                let room = rid(); let g = Liars::new(vec![other.player, me], stake);
-                let commits: Vec<Value> = g.players.iter().zip(&g.commits).map(|(p, (c, _))| json!({ "anon": p.anon, "commitment": c.0 })).collect();
-                for (i, p) in g.players.iter().enumerate() {
-                    let bal = app.ledger.lock().await.balance(&p.token).ok();
-                    app.log_reset(&p.token).await;
-                    app.log_to(&p.token, json!({ "t": "liars_start", "room": room, "seat": i, "you": p.anon, "dice": g.dice[i], "salt": g.commits[i].1.salt, "commitments": commits, "turn": g.turn, "stake": stake, "balance": bal })).await;
-                }
-                app.touch(&room).await;
-                app.liars.lock().await.insert(room, g);
-                return Ok(None);
-            }
-            if app.ledger.lock().await.balance(tok).map_err(lerr)? < stake { return Err("insufficient balance"); }
-            q.push(Waiting { player: me, stake });
-            json!({ "t": "queued", "id": id, "game": "liars" })
         }
         "liars_bid" | "liars_call" => {
             let room = v["room"].as_str().unwrap_or("").to_owned();
@@ -492,15 +632,18 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             if t == "liars_bid" {
                 let (q, f) = (v["q"].as_u64().unwrap_or(0) as u8, v["f"].as_u64().unwrap_or(0) as u8);
                 g.bid(who, q, f).map_err(|e| match e { pvp::BidError::NotYourTurn => "not your turn", pvp::BidError::NotHigher => "bid must be higher", _ => "invalid bid" })?;
-                let m = json!({ "t": "liars_bid", "room": room, "by": g.players[who].anon, "q": q, "f": f, "turn": g.turn });
+                let m = json!({ "t": "liars_bid", "room": room, "by": g.players[who].anon, "q": q, "f": f, "turn": g.turn, "turn_ms": app.turn_ms() });
                 for p in g.players.clone() { app.log_to(&p.token, m.clone()).await; }
+                drop(rooms);
                 app.touch(&room).await;
+                app.liars_house_turn(&room).await;
                 return Ok(None);
             }
             let (wi, count) = g.call(who).map_err(|_| "cannot call now")?;
             let pot = pvp::pot_after_rake(g.stake * g.players.len() as u64);
-            let (players, openings, winner, bid) = (g.players.clone(), g.openings(), g.players[wi].clone(), g.bid);
+            let (players, openings, winner, bid, stake) = (g.players.clone(), g.openings(), g.players[wi].clone(), g.bid, g.stake);
             rooms.remove(&room); drop(rooms);
+            app.keep_rematch(&room, "liars", players.clone(), stake).await;
             app.credit(&winner.token, pot, &format!("liars#{room}")).await;
             app.pvp_seen.lock().await.remove(&room);
             for p in &players { app.log_reset(&p.token).await; }
@@ -509,22 +652,6 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
                 app.notify(&p.token, json!({ "t": "liars_reveal", "room": room, "caller": players[who].anon, "bid": bid.map(|b| json!({"q": b.0, "f": b.1})), "count": count, "winner": winner.anon, "you_won": winner.token == p.token, "pot": pot, "openings": openings, "balance": bal })).await;
             }
             return Ok(None);
-        }
-        "holdem_join" => {
-            if !(20 * holdem::BB..=MAX_STAKE).contains(&stake) { return Err("buy-in must be 0.2 to 0.5 TAZ"); }
-            let me = Player { token: tok.to_owned(), anon: anon() };
-            let mut q = app.holdem_wait.lock().await;
-            if q.iter().any(|w| w.player.token == tok) { return Err("already queued"); }
-            if let Some(i) = q.iter().position(|w| w.stake == stake) {
-                let other = q.remove(i); drop(q);
-                app.debit(tok, stake, "holdem-buyin").await?;
-                if app.debit(&other.player.token, stake, "holdem-buyin").await.is_err() { app.credit(tok, stake, "holdem-refund").await; return Err("opponent left"); }
-                app.hm_new_room(other.player, me, stake).await;
-                return Ok(None);
-            }
-            app.debit(tok, stake, "holdem-hold").await?; app.credit(tok, stake, "holdem-hold").await;
-            q.push(Waiting { player: me, stake });
-            json!({ "t": "queued", "id": id, "game": "holdem" })
         }
         "hm_key" | "hm_shuffle" | "hm_shares" | "hm_act" | "holdem_leave" => { app.hm_message(tok, t, v).await?; return Ok(None); }
         _ => return Err("unknown message"),

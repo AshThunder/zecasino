@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use zecasino_mental_poker as mp;
 use crate::{holdem::{self, Act, Hand, Phase, Step, BB, HOUSE}, pvp::{self, Player}, App};
 
-pub struct Room { pub id: String, pub players: [Player; 2], pub stacks: [u64; 2], pub button: usize, pub hand: Option<Hand>, pub hand_no: u64, pub closed: bool, pub progress: u64, pub seated: [Value; 2] }
+pub struct Room { pub id: String, pub players: [Player; 2], pub stacks: [u64; 2], pub button: usize, pub hand: Option<Hand>, pub hand_no: u64, pub closed: bool, pub progress: u64, pub seated: [Value; 2], pub buy_in: u64 }
 
 fn hexpt(p: &curve25519_dalek::ristretto::RistrettoPoint) -> String { hex::encode(p.compress().as_bytes()) }
 
@@ -37,10 +37,10 @@ impl App {
 
     pub(crate) async fn hm_new_room(self: &Arc<Self>, a: Player, b: Player, buy_in: u64) {
         let id = crate::rid();
-        let mut room = Room { id: id.clone(), players: [a, b], stacks: [buy_in; 2], button: 0, hand: None, hand_no: 0, closed: false, progress: 0, seated: [Value::Null, Value::Null] };
+        let mut room = Room { id: id.clone(), players: [a, b], stacks: [buy_in; 2], button: 0, hand: None, hand_no: 0, closed: false, progress: 0, seated: [Value::Null, Value::Null], buy_in };
         for s in 0..2 {
             let bal = self.ledger.lock().await.balance(&room.players[s].token).ok();
-            room.seated[s] = json!({ "t": "hm_seated", "room": id, "seat": s, "you": room.players[s].anon, "opponent": room.players[1 - s].anon, "stacks": room.stacks, "blinds": [holdem::SB, BB], "balance": bal });
+            room.seated[s] = json!({ "t": "hm_seated", "room": id, "seat": s, "you": room.players[s].anon, "opponent": room.players[1 - s].anon, "opponent_house": crate::house_bot::is_house(&room.players[1 - s].token), "stacks": room.stacks, "blinds": [holdem::SB, BB], "balance": bal });
             self.notify(&room.players[s].token, room.seated[s].clone()).await;
         }
         self.holdems.lock().await.insert(id.clone(), room);
@@ -66,11 +66,12 @@ impl App {
         let Some(mut r) = self.holdems.lock().await.remove(id) else { return };
         r.closed = true;
         for p in &r.players { self.log_reset(&p.token).await; }
+        self.keep_rematch(id, "holdem", r.players.to_vec(), r.buy_in).await;
         // Room stacks only change when a hand settles, so an abandoned hand is refunded by
         // paying out the stacks as they stood when it started (blinds and bets included).
         for s in 0..2 {
             let amt = r.stacks[s];
-            let bal = if amt > 0 { self.ledger.lock().await.apply(&r.players[s].token, amt as i64, "payout", &format!("holdem#{id}")).ok() } else { self.ledger.lock().await.balance(&r.players[s].token).ok() };
+            let bal = if amt > 0 { if crate::house_bot::is_house(&r.players[s].token) { None } else { self.ledger.lock().await.apply(&r.players[s].token, amt as i64, "payout", &format!("holdem#{id}")).ok() } } else { self.ledger.lock().await.balance(&r.players[s].token).ok() };
             self.to_seat(&r, s, json!({ "t": "hm_closed", "room": id, "reason": why, "cashed_out": amt, "balance": bal })).await;
         }
     }
