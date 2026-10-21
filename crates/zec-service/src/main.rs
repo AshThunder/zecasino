@@ -4,6 +4,7 @@
 //!   zec-service init <birthday-height>   create the wallet DB + house account
 //!   zec-service sync | status | address <index> | deposits
 //!   zec-service withdraw <ua> <zat>
+//!   zec-service reserve-init <height|tip>   watch-only DB for the cold reserve, from $ZEC_RESERVE_MNEMONIC
 //!   zec-service serve                    sync loop + API on $ZEC_API (default 127.0.0.1:3300)
 mod cache;
 mod wallet;
@@ -15,13 +16,14 @@ use serde_json::{json, Value};
 use tokio::sync::Mutex;
 use zcash_client_backend::data_api::WalletRead;
 
-struct Cfg { lwd: String, db: PathBuf, mnemonic: PathBuf, api: String, key: Option<String> }
+struct Cfg { lwd: String, db: PathBuf, mnemonic: PathBuf, api: String, key: Option<String>, reserve_db: PathBuf, reserve_ufvk: PathBuf }
 fn cfg() -> Cfg {
     let e = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.into());
-    Cfg { lwd: e("ZEC_LWD", "https://testnet.zec.rocks:443"), db: e("ZEC_WALLET_DB", "zec-wallet.sqlite").into(), mnemonic: e("ZEC_MNEMONIC", "house.mnemonic").into(), api: e("ZEC_API", "127.0.0.1:3300"), key: std::env::var("ZEC_INTERNAL_KEY").ok() }
+    Cfg { lwd: e("ZEC_LWD", "https://testnet.zec.rocks:443"), db: e("ZEC_WALLET_DB", "zec-wallet.sqlite").into(), mnemonic: e("ZEC_MNEMONIC", "house.mnemonic").into(), api: e("ZEC_API", "127.0.0.1:3300"), key: std::env::var("ZEC_INTERNAL_KEY").ok(),
+        reserve_db: e("ZEC_RESERVE_DB", "reserve-view.sqlite").into(), reserve_ufvk: e("ZEC_RESERVE_UFVK", "reserve.ufvk").into() }
 }
 
-struct Svc { db: Mutex<wallet::Db>, client: Mutex<wallet::Client>, cfg: Cfg }
+struct Svc { db: Mutex<wallet::Db>, reserve: Option<Mutex<wallet::Db>>, client: Mutex<wallet::Client>, cfg: Cfg }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,6 +32,20 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("help");
     if cmd == "new-seed" { wallet::new_mnemonic(&c.mnemonic)?; println!("wrote {}", c.mnemonic.display()); return Ok(()); }
+    if cmd == "reserve-init" {
+        let mut client = wallet::connect(&c.lwd).await?;
+        let a = args.get(1).ok_or_else(|| anyhow!("birthday height (or `tip`) required"))?;
+        let h: u32 = if a == "tip" { (client.get_latest_block(zcash_client_backend::proto::service::ChainSpec::default()).await?.into_inner().height as u32).saturating_sub(10) } else { a.parse()? };
+        let rm = std::env::var("ZEC_RESERVE_MNEMONIC").map_err(|_| anyhow!("set ZEC_RESERVE_MNEMONIC"))?;
+        let ufvk = wallet::reserve_ufvk(&wallet::read_seed(rm.as_ref())?)?;
+        std::fs::write(&c.reserve_ufvk, &ufvk)?;
+        let mut rdb = wallet::open(&c.reserve_db)?;
+        wallet::import_view(&mut rdb, &mut client, &ufvk, h).await?;
+        let addr_file = c.reserve_ufvk.with_extension("addr");
+        if !addr_file.exists() { std::fs::write(&addr_file, wallet::deposit_address(&mut rdb, 1)?)?; }
+        println!("reserve viewing key written to {}\naddress {}", c.reserve_ufvk.display(), std::fs::read_to_string(&addr_file)?);
+        return Ok(());
+    }
     let mut db = wallet::open(&c.db)?;
     let need_net = !matches!(cmd, "address" | "deposits");
     let mut client = if need_net { Some(wallet::connect(&c.lwd).await?) } else { None };
@@ -57,16 +73,18 @@ async fn main() -> anyhow::Result<()> {
         }
         "serve" => {
             if c.key.is_none() { bail!("set ZEC_INTERNAL_KEY"); }
-            let svc = Arc::new(Svc { db: Mutex::new(db), client: Mutex::new(client.unwrap()), cfg: c });
+            let reserve = if c.reserve_db.exists() && c.reserve_ufvk.exists() { Some(Mutex::new(wallet::open(&c.reserve_db)?)) } else { tracing::warn!("no reserve view wallet: run reserve-init"); None };
+            let svc = Arc::new(Svc { db: Mutex::new(db), reserve, client: Mutex::new(client.unwrap()), cfg: c });
             let s2 = svc.clone();
             tokio::spawn(async move { loop {
                 { let mut db = s2.db.lock().await; let mut cl = s2.client.lock().await;
-                  if let Err(e) = wallet::sync(&mut db, &mut cl).await { tracing::warn!("sync failed: {e:#}"); } }
+                  if let Err(e) = wallet::sync(&mut db, &mut cl).await { tracing::warn!("sync failed: {e:#}"); }
+                  if let Some(r) = &s2.reserve { if let Err(e) = wallet::sync(&mut *r.lock().await, &mut cl).await { tracing::warn!("reserve sync failed: {e:#}"); } } }
                 tokio::time::sleep(Duration::from_secs(20)).await;
             } });
             let app = Router::new()
                 .route("/status", get(api_status)).route("/address", post(api_address))
-                .route("/deposits", get(api_deposits)).route("/withdraw", post(api_withdraw))
+                .route("/deposits", get(api_deposits)).route("/withdraw", post(api_withdraw)).route("/reserve", get(api_reserve))
                 .with_state(svc.clone());
             let addr = svc.cfg.api.clone();
             tracing::info!(%addr, lwd = %svc.cfg.lwd, "zec-service listening");
@@ -81,6 +99,16 @@ fn status(db: &wallet::Db) -> anyhow::Result<Value> {
     let tip = db.chain_height()?.map(u32::from);
     let (spendable, total) = wallet::balance(db).unwrap_or((0, 0));
     Ok(json!({ "network": "testnet", "tip": tip, "spendable_zat": spendable, "total_zat": total }))
+}
+
+/// Public facts only: the reserve viewing key, its address, and what the watch-only wallet sees.
+async fn api_reserve(State(s): State<Arc<Svc>>) -> ApiResult {
+    let r = s.reserve.as_ref().ok_or((StatusCode::NOT_FOUND, "no reserve wallet".into()))?;
+    let db = r.lock().await;
+    let ufvk = std::fs::read_to_string(&s.cfg.reserve_ufvk).map_err(|e| ise(e.into()))?;
+    let (_, total) = wallet::balance(&db).unwrap_or((0, 0));
+    Ok(Json(json!({ "ufvk": ufvk.trim(), "address": std::fs::read_to_string(s.cfg.reserve_ufvk.with_extension("addr")).map_err(|e| ise(e.into()))?.trim(), "birthday": wallet::birthday(&db).map_err(ise)?,
+        "tip": db.chain_height().map_err(|e| ise(e.into()))?.map(u32::from), "total_zat": total, "network": "testnet" })))
 }
 
 type ApiResult = Result<Json<Value>, (StatusCode, String)>;

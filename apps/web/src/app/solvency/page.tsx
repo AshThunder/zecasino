@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getClient, ZAT } from "@/lib/server";
 import { verifyInclusion, type Node, type Step } from "@/lib/solvency";
 
-type Sol = { liabilities_zat: number; house_pnl_zat: number; snapshot: { epoch: number; built_at: number; root: Node; leaves: number; depth: number; next_at: number }; reserves: null | { tip: number; spendable_zat: number; total_zat: number; network: string } };
+type Sol = { liabilities_zat: number; house_pnl_zat: number; snapshot: { epoch: number; built_at: number; root: Node; leaves: number; depth: number; next_at: number }; reserves: null | { tip: number; total_zat: number; network: string; ufvk: string; address: string; birthday: number }; hot: null | { tip: number; spendable_zat: number; total_zat: number } };
 type Proof = { epoch: number; root: Node; salt?: string; balance: number; path: Step[] | null };
 const HTTP = (process.env.NEXT_PUBLIC_GAME_WS ?? "ws://127.0.0.1:3200/ws").replace(/^ws/, "http").replace(/\/ws$/, "");
 const z = (n: number) => (n / ZAT).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
@@ -40,7 +40,7 @@ export default function Solvency() {
       {down && <p className="wait">The game server is offline, so there is no live snapshot to show.</p>}
       <div className="sol-grid">
         <div className="sol-card"><small>Owed to players</small><b>ⓩ {s ? z(liab) : "…"}</b><span>{s ? `${s.snapshot.leaves} funded sessions · root sum` : ""}</span></div>
-        <div className="sol-card"><small>House reserves</small><b>ⓩ {res ? z(res.total_zat) : s ? "n/a" : "…"}</b><span>{res ? `${z(res.spendable_zat)} spendable · ${res.network} block ${res.tip.toLocaleString()}` : "wallet service offline"}</span></div>
+        <div className="sol-card"><small>Cold reserve · on-chain verifiable</small><b>ⓩ {res ? z(res.total_zat) : s ? "n/a" : "…"}</b><span>{res ? `watched with the public viewing key · ${res.network} block ${res.tip?.toLocaleString()}` : "reserve wallet offline"}{s?.hot ? ` · hot wallet ⓩ ${z(s.hot.total_zat)} (server-reported)` : ""}</span></div>
         <div className={`sol-card ${cover !== null && cover < 1 ? "short" : ""}`}><small>Coverage</small><b>{cover !== null ? `${(cover * 100).toFixed(1)}%` : "n/a"}</b>
           <div className="sol-bar"><i style={{ width: `${Math.min(100, (cover ?? 0) * 100)}%` }} /></div></div>
       </div>
@@ -75,7 +75,25 @@ export default function Solvency() {
           )}
         </section>
       </div>
-      <p className="sol-foot">What this does not prove yet: reserves are read from the house wallet by the server. Publishing a viewing key for a separate cold-reserve account would let anyone check that figure on-chain too, without linking deposits.</p>
+      {res && (
+        <section className="fair sol-vk">
+          <h4>Check the reserve yourself</h4>
+          <p>The cold reserve is a separate wallet from the one that receives deposits, so its viewing key shows reserve movements only, never player deposits. A viewing key can see incoming and outgoing notes but cannot spend anything. The seed is kept offline.</p>
+          <dl>
+            <dt>Reserve address</dt><dd className="mono">{res.address}</dd>
+            <dt>Viewing key (UFVK)</dt><dd className="mono vk">{res.ufvk}</dd>
+            <dt>Birthday height</dt><dd className="mono">{res.birthday.toLocaleString()}</dd>
+          </dl>
+          <div className="vk-actions">
+            <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(res.ufvk)}>Copy viewing key</button>
+          </div>
+          <pre className="mono vk-cmd">{`zcash-devtool wallet -w reserve-check init-fvk --name reserve \\
+  --fvk ${res.ufvk.slice(0, 18)}… --birthday ${res.birthday}
+zcash-devtool wallet -w reserve-check sync
+zcash-devtool wallet -w reserve-check balance`}</pre>
+          <p>Any wallet that can import a viewing key (Zingo, zcash-devtool) shows the same balance. Coverage above compares that on-chain figure with the liability root, which leaves the hot wallet out.</p>
+        </section>
+      )}
     </div>
   );
 }

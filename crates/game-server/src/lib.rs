@@ -106,8 +106,10 @@ impl App {
 async fn solvency(State(app): State<Arc<App>>) -> Json<Value> {
     let (live, pnl) = { let l = app.ledger.lock().await; (l.liabilities(), l.house_pnl()) };
     let snap = { let s = app.snapshot().await; json!({ "epoch": s.epoch, "built_at": s.built_at, "root": s.root(), "leaves": s.leaves(), "depth": s.depth(), "next_at": s.built_at + solvency::REBUILD_SECS }) };
-    let reserves = match &app.zec { Some(z) => z.status().await.ok(), None => None };
-    Json(json!({ "liabilities_zat": live, "house_pnl_zat": pnl, "snapshot": snap, "reserves": reserves }))
+    // Reserves = the cold reserve account, watched with its published viewing key (anyone can
+    // import that key and check the figure). The hot wallet is shown separately, server-reported.
+    let (reserves, hot) = match &app.zec { Some(z) => (z.reserve().await.ok(), z.status().await.ok()), None => (None, None) };
+    Json(json!({ "liabilities_zat": live, "house_pnl_zat": pnl, "snapshot": snap, "reserves": reserves, "hot": hot }))
 }
 
 async fn ws(up: WebSocketUpgrade, State(app): State<Arc<App>>) -> impl IntoResponse { up.on_upgrade(move |s| conn(s, app)) }

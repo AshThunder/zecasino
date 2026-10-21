@@ -456,3 +456,10 @@ html:has(.cashier[open]) { overflow: hidden; }
 .act-clock { font-family: var(--font-mono); min-width: 48px; text-align: center; padding: 8px 10px; border-radius: 999px; border: 1px solid #F4B72866; color: var(--gold-hi); }
 .act-clock.low { border-color: #E0414B; color: #FF7A80; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .55; } }
+.sol-vk { position: static; width: auto; margin-top: 18px; }
+.sol-vk dl { display: grid; grid-template-columns: 170px 1fr; gap: 8px 14px; }
+.sol-vk dd { word-break: break-all; font-size: 12px; }
+.sol-vk dd.vk { color: var(--gold-hi); }
+.vk-actions { margin: 12px 0; }
+.vk-cmd { background: #0B0B0C; border: 1px solid #ffffff1a; border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #C9C1AE; white-space: pre-wrap; }
+.liars-page .result-toast.verdict { position: static; translate: none; max-width: 560px; text-align: center; padding: 12px 24px; }

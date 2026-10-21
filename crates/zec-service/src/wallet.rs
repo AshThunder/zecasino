@@ -187,3 +187,22 @@ mod tests {
         assert!(!shielded_only(&t));
     }
 }
+
+/// Viewing key of the cold reserve account, derived once from its own seed. Only this string is
+/// ever stored next to the service; the reserve seed stays offline (run/reserve.mnemonic, 0600).
+pub fn reserve_ufvk(seed: &SecretVec<u8>) -> anyhow::Result<String> {
+    let usk = UnifiedSpendingKey::from_seed(&NETWORK, seed.expose_secret(), zip32::AccountId::ZERO).map_err(|e| anyhow!("{e:?}"))?;
+    Ok(usk.to_unified_full_viewing_key().encode(&NETWORK).map_err(|e| anyhow!("{e:?}"))?)
+}
+
+/// Imports a viewing key as a watch-only account (the reserve view DB holds no spending material).
+pub async fn import_view(db: &mut Db, client: &mut Client, ufvk: &str, birthday: u32) -> anyhow::Result<()> {
+    if !db.get_account_ids()?.is_empty() { return Ok(()); }
+    let k = zcash_keys::keys::UnifiedFullViewingKey::decode(&NETWORK, ufvk.trim()).map_err(|e| anyhow!("bad viewing key: {e}"))?;
+    let ts = client.get_tree_state(service::BlockId { height: (birthday - 1) as u64, ..Default::default() }).await?.into_inner();
+    let bday = AccountBirthday::from_treestate(ts, None).map_err(|_| anyhow!("bad tree state"))?;
+    db.import_account_ufvk("reserve", &k, &bday, zcash_client_backend::data_api::AccountPurpose::ViewOnly, None)?;
+    Ok(())
+}
+
+pub fn birthday(db: &Db) -> anyhow::Result<u32> { Ok(u32::from(db.get_account_birthday(account(db)?)?)) }

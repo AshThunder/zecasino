@@ -155,12 +155,12 @@ export default function Liars() {
           ))}
         </div>
         <div className="lp-center">
+          {verdictText ? <div className="result-toast verdict" role="status"><span>{verdictText}</span></div> : <>
           <ChipStack values={Array(Math.max(players.length, 2)).fill(STAKE)} size={46} />
-          <div className="bid-card" style={verdictText ? { visibility: "hidden" } : undefined}>
+          <div className="bid-card">
             {bid ? <><small>{bid.by} bids</small><b>{WORDS[bid.q]} × </b><Die value={bid.f} size={40} /></> : <small>{phase === "lobby" ? "Sit down to get matched with another player" : phase === "bid" ? (turn === 0 ? "Your opening bid" : "Waiting for the opening bid") : "Shake your cup to start the round"}</small>}
-          </div>
+          </div></>}
         </div>
-        {verdictText && <div className="result-toast" role="status"><span>{verdictText}</span></div>}
         {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
         {phase === "lobby" && <div className="lp-lobby"><button className="btn gold lg" onClick={sitDown} disabled={searching}>{searching ? "Finding a player…" : `Sit down · ⓩ ${STAKE.toFixed(3)}`}</button><small>Heads-up · server-dealt dice, sealed before the first bid</small></div>}
         {me && (
