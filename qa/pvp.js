@@ -34,7 +34,7 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
       if (mode === "normal") record("Carrot", "round plays to reveal (two sessions)", !!done);
       if (done) {
         const fair = (await A.p.locator(".fair").innerText()) + (await B.p.locator(".fair").innerText());
-        record("Carrot", `${mode}: seal verified by both browsers`, /verified|✓/.test(fair) && !/mismatch|✗/.test(fair));
+        record("Carrot", `${mode}: seal verified by both browsers`, /verified|✓/i.test(fair) && !/mismatch|✗/i.test(fair));
       }
       record("Carrot", `${mode}: ledger reconcile A`, await q.reconcile(A, "carrot A"));
       record("Carrot", `${mode}: ledger reconcile B`, await q.reconcile(B, "carrot B"));

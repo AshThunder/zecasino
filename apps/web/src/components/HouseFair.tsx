@@ -1,6 +1,7 @@
 "use client";
 import { ChainSees } from "@/components/ChainSees";
 import { useState } from "react";
+import { VerifiedRound } from "./Verified";
 import { verifyBet, type Game, type Revealed } from "@/lib/house";
 
 type SeatView = { commitment: string; clientSeed: string; nonce: number; remote: boolean; rotate: (cs: string) => Promise<Revealed> };
@@ -28,9 +29,14 @@ export function HouseFair({ seat, game, bets, fmt, formula, check, extra }: { se
       <button className="btn ghost sm full" onClick={rotate}>Reveal seed &amp; verify</button>
       {checks && (
         <div className="verify">
-          <dt>Revealed server seed</dt><dd className="mono">{checks.rev.serverSeed.slice(0, 16)}…</dd>
+          <div className="v-head"><span>Revealed seed</span><code className="mono">{checks.rev.serverSeed.slice(0, 16)}…</code></div>
           {checks.rows.length === 0 && <p>No bets under that seed.</p>}
-          {checks.rows.map(r => <div key={r.nonce} className="vrow mono"><span>#{r.nonce}</span><span>{r.v}</span><b className={r.ok ? "ok" : "bad"}>{r.ok ? "✓ match" : "✗ mismatch"}</b></div>)}
+          {checks.rows.map(r => <VerifiedRound key={r.nonce} id={`#${r.nonce}`} summary={r.v} ok={r.ok}>
+            <dt>Commitment</dt><dd className="mono">SHA-256(seed) = {checks.rev.commitment.slice(0, 12)}… ✓</dd>
+            <dt>Inputs</dt><dd className="mono">HMAC(seed, “{checks.rev.clientSeed}:{r.nonce}:…”)</dd>
+            <dt>Recomputed</dt><dd className="mono">{r.v}</dd>
+            <dt>Recorded</dt><dd className="mono">{r.ok ? "same as recomputed" : "differs from recomputed"}</dd>
+          </VerifiedRound>)}
         </div>
       )}
       {extra}

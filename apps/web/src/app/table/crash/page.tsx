@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChipRack } from "@/components/ChipRack";
 import { ChipStack } from "@/components/Chip";
 import { HouseFair } from "@/components/HouseFair";
+import { VerifiedRound } from "@/components/Verified";
 import { ZMark } from "@/components/ZMark";
 import { useSeat } from "@/lib/house";
 import { multAt, msFor, curve } from "@/lib/crash";
@@ -237,7 +238,10 @@ export default function Crash() {
       </div>
       <HouseFair seat={seat} game="crash" bets={remote ? [] : hist}
         extra={remote ? <div className="verify"><dt>Round seeds (checked in your browser)</dt>{checked.length === 0 && <p>Waiting for the first bust…</p>}
-          {checked.map(c => <div key={c.round} className="vrow mono"><span>#{c.round}</span><span>{c.bust.toFixed(2)}×</span><b className={c.ok ? "ok" : "bad"}>{c.ok ? "✓ match" : "✗ mismatch"}</b></div>)}</div> : undefined} fmt={o => `${(Number(o) / 100).toFixed(2)}×`} formula="h = first 4 bytes of HMAC-SHA256(server seed, “client seed:nonce:0”). 1 in 100 rounds bust instantly; otherwise bust = ⌊(100·2³² − h) / (2³² − h)⌋ / 100, capped at 1000×." />
+          {checked.map(c => <VerifiedRound key={c.round} id={`#${c.round}`} summary={`${c.bust.toFixed(2)}×`} ok={c.ok}>
+            <dt>Commitment</dt><dd className="mono">SHA-256(revealed seed) equals the round&apos;s published commitment</dd>
+            <dt>Bust</dt><dd className="mono">recomputed {c.bust.toFixed(2)}× from HMAC(seed, “crash:{c.round}:0”)</dd>
+          </VerifiedRound>)}</div> : undefined} fmt={o => `${(Number(o) / 100).toFixed(2)}×`} formula="h = first 4 bytes of HMAC-SHA256(server seed, “client seed:nonce:0”). 1 in 100 rounds bust instantly; otherwise bust = ⌊(100·2³² − h) / (2³² − h)⌋ / 100, capped at 1000×." />
     </div>
   );
 }

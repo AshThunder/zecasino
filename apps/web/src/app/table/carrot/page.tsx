@@ -7,6 +7,7 @@ import { CarrotBox } from "@/components/CarrotBox";
 import { Carrot } from "@/components/Carrot";
 import { ChipStack, Chip } from "@/components/Chip";
 import { FairPanel } from "@/components/FairPanel";
+import { VerifiedRound } from "@/components/Verified";
 import { getClient, toZat } from "@/lib/server";
 import { hex, pvpCommit, unhex } from "@/lib/fair";
 import { celebrate, flyChips, chipsFor } from "@/lib/motion";
@@ -170,9 +171,11 @@ export default function CarrotTable() {
         <dl>
           <dt>Commitment (published before the peek)</dt><dd className="mono">{short(seal.commitment)}</dd>
           <dt>Dealer</dt><dd className="mono">{remote ? "game server · live room" : "in-browser table (server offline)"}</dd>
-          {seal.salt && <><dt>Opened value</dt><dd className="mono">{seal.value}</dd><dt>Salt</dt><dd className="mono">{short(seal.salt)}</dd>
-            <dt>Check</dt><dd className={`mono ${seal.ok ? "ok" : "bad"}`}>{seal.ok ? "✓ SHA-256 matches the commitment" : "✗ does not match"}</dd></>}
         </dl>
+        {seal.salt && <div className="verify"><VerifiedRound id="seal" summary={`box ${seal.value}`} ok={!!seal.ok}>
+          <dt>Opened value</dt><dd className="mono">{seal.value}</dd><dt>Salt</dt><dd className="mono">{short(seal.salt)}</dd>
+          <dt>Check</dt><dd className="mono">SHA-256(“zecasino:commit:v1”‖len‖salt‖box) {seal.ok ? "equals" : "does not equal"} the commitment</dd>
+        </VerifiedRound></div>}
         <p className="note">The carrot&apos;s box is sealed as SHA-256(“zecasino:commit:v1”‖len‖salt‖box) before anyone peeks. At reveal the salt opens it and your browser recomputes the hash, so nobody can move the carrot after hearing the bluff.</p>
       </aside>
         <ChainSees table="carrot" />
