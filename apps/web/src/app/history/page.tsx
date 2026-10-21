@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Header } from "@/components/Header";
 import { VerifiedRound } from "@/components/Verified";
 import { clearAll, load, onChange, remove, verifyProof, type Entry, type Proof } from "@/lib/history";
 import { GAMES } from "@/lib/games";
@@ -28,7 +27,6 @@ export default function History() {
   const state = (e: Entry) => { const r = ok[e.id]; if (!r) return null; return r.some(x => x === false) ? false : r.some(x => x === null) ? null : true; };
   return (
     <>
-      <Header />
       <main className="history-page wrap">
         <div className="h-head">
           <div><p className="eyebrow">Only in this browser</p><h1>Session history</h1>
@@ -42,7 +40,7 @@ export default function History() {
               <h3>No rounds yet</h3><p>Play any table and each round lands here with its proof.</p><Link className="btn gold" href="/">Choose a table</Link></div>
           : <div className="h-list verify">{list.map(e => (
               <div className="h-item" key={e.id}>
-                <VerifiedRound id={name(e.game)} summary={<>{e.summary}<span className="h-at">{new Date(e.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}{e.demo ? " · play chips" : ""}</span></>} ok={state(e)}>
+                <VerifiedRound id={name(e.game)} summary={<>{e.summary}<span className="h-at">{new Date(e.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}{e.demo ? " · play chips" : ""}</span></>} ok={state(e)} pendingLabel={ok[e.id] ? "Seed not revealed" : "Checking…"}>
                   {e.proofs.map((p, i) => <ProofRows key={i} p={p} />)}
                 </VerifiedRound>
                 <button className="h-del" aria-label="Delete this round" onClick={() => remove(e.id)}>×</button>
