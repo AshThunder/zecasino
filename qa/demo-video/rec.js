@@ -79,25 +79,42 @@ const SCENES = {
     await click(p, p.getByRole("button", { name: "Verify my inclusion" }), 900); await sleep(2500);
     await scroll(p, 600, 2200); await sleep(500);
     await to(p, p.getByRole("button", { name: "Copy viewing key" }), 900); await sleep(2500); }; },
-  // PvP scenes: written against the current UI; selectors are re-checked once the Quick Match deploy lands.
-  async holdem(p, ctx2) { return pvp(p, ctx2, "/table/holdem"); },
-  async pvp(p, ctx2) { return pvp(p, ctx2, "/table/carrot"); },
-};
-
-async function pvp(p, opp, path) {
-  await p.goto(BASE + path); await p.waitForLoadState("networkidle"); await sleep(1500);
-  return async () => {
-    const qm = p.getByRole("button", { name: /Quick Match/i });
-    await click(p, qm.first(), 900); await sleep(1500);
-    if (opp) { await opp.goto(BASE + path); await opp.waitForLoadState("networkidle"); await opp.getByRole("button", { name: /Quick Match/i }).first().click().catch(() => {}); }
-    const house = p.getByRole("button", { name: /house/i });
-    try { await house.first().waitFor({ timeout: 25000 }); await to(p, house.first(), 700); await sleep(1500); } catch {}
-    for (let i = 0; i < 12; i++) {
-      const act = p.locator(".actions button:enabled, .pvp-actions button:enabled").first();
-      if (await act.count()) { await click(p, act, 600); } await sleep(1500);
+  // PvP scenes (Quick Match UI). "opp" is a second, headless demo browser acting as a real opponent.
+  async holdem(p, opp) { await p.goto(BASE + "/table/holdem"); await p.waitForLoadState("networkidle"); await sleep(1500);
+    await opp.goto(BASE + "/table/holdem"); await opp.waitForLoadState("networkidle"); await sleep(1000); return async () => {
+    await click(p, p.locator(".stake-pick button", { hasText: "0.20" }), 800); await click(p, p.getByRole("button", { name: /^Quick (match|seat)/ }));
+    await sleep(1200); await opp.locator(".stake-pick button", { hasText: "0.20" }).click(); await opp.getByRole("button", { name: /^Quick (match|seat)/ }).click(); mark("matched");
+    const vis = async (pg, n) => { const l = pg.getByRole("button", { name: n }); return (await l.count()) > 0 && await l.first().isVisible() && await l.first().isEnabled(); };
+    for (let i = 0; i < 60; i++) {
+      for (const n of ["Check", /^Call/]) if (await vis(opp, n)) { await opp.getByRole("button", { name: n }).first().click().catch(() => {}); break; }
+      for (const n of ["Check", /^Call/]) if (await vis(p, n)) { await click(p, p.getByRole("button", { name: n }).first(), 600); await sleep(600); break; }
+      if (await p.locator(".result-toast").count()) { mark("showdown"); break; } await sleep(400);
     }
-  };
-}
+    await sleep(2500); const f = p.locator("aside.fair"); if (await f.count()) { await to(p, f, 900); await sleep(2500); } }; },
+  async carrot(p) { await p.goto(BASE + "/table/carrot"); await p.waitForLoadState("networkidle"); await sleep(1500); return async () => {
+    await click(p, p.locator(".stake-pick button", { hasText: "0.020" }), 800); await click(p, p.getByRole("button", { name: /^Quick match/ })); mark("queued");
+    const h = p.getByRole("button", { name: "Play the house instead" }); await h.waitFor({ timeout: 60000 }); mark("house-offer"); await sleep(1200);
+    await click(p, h); mark("vs-house"); await sleep(2500);
+    const badge = p.locator(".house-badge").first(); if (await badge.count()) { await to(p, badge, 700); await sleep(1500); }
+    for (let i = 0; i < 40; i++) {
+      const peek = p.getByRole("button", { name: "Peek inside" }), keep = p.getByRole("button", { name: "Keep my box" });
+      if (await peek.count() && await peek.isEnabled()) { await click(p, peek); await sleep(2000); const g = p.getByRole("button", { name: /got the carrot/ }); if (await g.count()) await click(p, g.first()); break; }
+      if (await keep.count() && await keep.isEnabled()) { await click(p, keep); break; } await sleep(500);
+    }
+    await sleep(4000); mark("done"); }; },
+  async liars(p, opp) { await p.goto(BASE + "/table/liars"); await p.waitForLoadState("networkidle"); await sleep(1500);
+    await opp.goto(BASE + "/table/liars"); await opp.waitForLoadState("networkidle"); await sleep(1000); return async () => {
+    await click(p, p.locator(".stake-pick button", { hasText: "0.010" }), 800); await click(p, p.getByRole("button", { name: /^Quick match/ })); await sleep(1500);
+    await opp.locator(".stake-pick button", { hasText: "0.010" }).click(); await opp.getByRole("button", { name: /^Quick match/ }).click(); mark("matched");
+    const vis = async (pg, n) => { const l = pg.getByRole("button", { name: n }); return (await l.count()) > 0 && await l.first().isVisible() && await l.first().isEnabled(); };
+    for (let i = 0, bids = 0; i < 80; i++) {
+      if (bids > 1 && await vis(opp, "Liar!")) await opp.getByRole("button", { name: "Liar!" }).click().catch(() => {}); else if (await vis(opp, "Bid")) await opp.getByRole("button", { name: "Bid" }).first().click().catch(() => {});
+      if (await vis(p, "Bid")) { if (bids++ < 2) { await click(p, p.getByRole("button", { name: "Bid" }).first(), 600); } else if (await vis(p, "Liar!")) { await click(p, p.getByRole("button", { name: "Liar!" }), 700); } }
+      if (await vis(p, "Rematch")) { mark("over"); break; } await sleep(400);
+    }
+    await sleep(3500); }; },
+};
+const T0 = Date.now(); let REC = 0; function mark(n) { console.log("MARK", n, ((Date.now() - REC) / 1000).toFixed(1)); }
 
 (async () => {
   const real = ["deposit", "withdraw", "solvency"].includes(scene);
@@ -108,11 +125,11 @@ async function pvp(p, opp, path) {
   await ctx.addInitScript(CURSOR);
   const p = ctx.pages()[0] || await ctx.newPage(); p.setDefaultTimeout(30000);
   let opp = null;
-  if (scene === "holdem" || scene === "pvp") { const b2 = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] }); const c2 = await b2.newContext({ viewport: { width: 1440, height: 810 } }); await c2.addInitScript(() => { localStorage.setItem("zc.howto.seen", "all"); localStorage.setItem("zc.mode", "demo"); }); opp = await c2.newPage(); }
+  if (["holdem", "liars"].includes(scene)) { const b2 = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] }); const c2 = await b2.newContext({ viewport: { width: 1440, height: 810 } }); await c2.addInitScript(() => { localStorage.setItem("zc.howto.seen", "all"); localStorage.setItem("zc.mode", "demo"); }); opp = await c2.newPage(); }
   const run = await SCENES[scene](p, opp);
   await p.mouse.move(mx, my);
   const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "x11grab", "-draw_mouse", "0", "-framerate", "30", "-video_size", "1920x1080", "-i", process.env.DISPLAY, "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", `${out}/${scene}.mp4`], { stdio: ["pipe", "inherit", "inherit"] });
-  await sleep(700);
+  await sleep(700); REC = Date.now() - 700;
   try { await run(); } catch (e) { console.log("SCENE ERR", e.message); }
   ff.stdin.write("q"); await new Promise(r => ff.on("close", r));
   await p.screenshot({ path: `${out}/${scene}-last.png` });
