@@ -1,5 +1,6 @@
 "use client";
 import { Toaster } from "./Toaster";
+import { RecoveryCard } from "./Recovery";
 import { toast } from "@/lib/toast";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -67,6 +68,7 @@ function MobileMenu({ path }: { path: string }) {
 export function Header() {
   const live = useSyncExternalStore(serverState.subscribe, serverState.get, serverState.server);
   useEffect(() => { getClient(); installMotion(); }, []);
+  useEffect(() => { if (sessionStorage.getItem("zc.restored") && live.balance != null) { sessionStorage.removeItem("zc.restored"); toast({ kind: "success", title: "Session restored", body: `Balance ⓩ ${live.balance.toFixed(4)} is back in this browser.` }); } }, [live.balance]);
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const [muted, setM] = useState(isMuted());
@@ -120,6 +122,7 @@ function SessionKey({ onClose }: { onClose: () => void }) {
       <label className="sk-keep"><input type="checkbox" checked={keep} onChange={e => remember(e.target.checked)} /> Remember on this device (stored in this browser only)</label>
       <div className="sk-row"><input id="sk-restore" className="mono" placeholder="Paste a saved key to restore" value={paste} onChange={e => setPaste(e.target.value)} spellCheck={false} />
         <button className="btn gold sm" onClick={restore} disabled={!/^[0-9a-f]{64}$/.test(paste.trim())}>Restore</button></div>
+      <RecoveryCard compact />
       <button className="sk-close" onClick={onClose} aria-label="Close">×</button>
     </div>
   );

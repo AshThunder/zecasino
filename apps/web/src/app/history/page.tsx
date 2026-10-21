@@ -32,7 +32,7 @@ export default function History() {
           <div><p className="eyebrow">Only in this browser</p><h1>Session history</h1>
             <p className="lede">Your past rounds are kept in this browser&apos;s local storage and nowhere else; the server keeps no per-player history. Every round is re-verified here, from its stored seeds and salts, each time you open this page.</p></div>
           {list && list.length > 0 && (confirm
-            ? <div className="h-confirm"><span>Delete all {list.length} rounds from this browser?</span><button className="btn sm danger" onClick={() => { clearAll(); setConfirm(false); }}>Delete</button><button className="btn ghost sm" onClick={() => setConfirm(false)}>Keep</button></div>
+            ? <div className="h-confirm"><p className="h-warn">This deletes round history only. Your balance is tied to your session key: if you also plan to clear site data, save your recovery code first (Shielded session → Save your recovery code).</p><span>Delete all {list.length} rounds from this browser?</span><button className="btn sm danger" onClick={() => { clearAll(); setConfirm(false); }}>Delete</button><button className="btn ghost sm" onClick={() => setConfirm(false)}>Keep</button></div>
             : <button className="btn ghost sm" onClick={() => setConfirm(true)}>Clear history</button>)}
         </div>
         {list === null ? <div className="h-list">{[0, 1, 2].map(i => <div key={i} className="skel h-skel" />)}</div>

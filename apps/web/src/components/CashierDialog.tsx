@@ -1,4 +1,5 @@
 "use client";
+import { RecoveryCard, recoverySaved } from "./Recovery";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { DEMO, getClient, toZat } from "@/lib/server";
@@ -14,6 +15,8 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [wd, setWd] = useState<{ ok: boolean; text: string } | null>(null);
   const [credited, setCredited] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+  const [saved, setSaved] = useState(true);
+  useEffect(() => { if (open) setSaved(recoverySaved()); }, [open]);
   const address = live?.address ?? "";
   const uri = live ? `zcash:${live.address}` : "";
 
@@ -58,8 +61,9 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
       </div>
       {DEMO ? (
         <div className="demo-cashier"><p><b>Demo tables have no cashier.</b> Play chips can&apos;t be deposited or withdrawn, and nothing here reaches the chain. Use <em>Refill chips</em> in the blue bar, or switch to Real to deposit TAZ.</p></div>
-      ) : tab === "deposit" ? (
-        <div className="dep">
+      ) : tab === "deposit" ? (<>
+        {!saved && <RecoveryCard onDone={() => setSaved(true)} />}
+        <div className={`dep ${saved ? "" : "addr-locked"}`} aria-hidden={!saved}>
           <div className="qr-wrap">
             {qr ? <img src={qr} alt="ZIP-321 payment QR" width={220} height={220} /> : <div className="qr-skel" aria-hidden="true" />}
             <span className="qr-badge"><ZMark size={34} /></span>
@@ -81,7 +85,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
             <li>Only the house viewing key can see what reached this address.</li>
             <li>Send from a shielded wallet: Zashi, Zingo, YWallet.</li>
           </ul>
-        </div>
+        </div></>
       ) : (
         <form className="wd" onSubmit={e => { e.preventDefault(); withdraw(e.currentTarget); }}>
           <label htmlFor="wd-addr">Withdraw to a shielded address</label>

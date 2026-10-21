@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { DEMO, setMode } from "@/lib/server";
 import { GAMES } from "@/lib/games";
 import { Walkthrough } from "@/components/Walkthrough";
+import { RestoreDialog } from "@/components/Recovery";
 import { useLobby, pct, type Lobby } from "@/lib/lobby";
 
 
@@ -26,6 +27,7 @@ export default function LobbyPage() {
   const [demo, setDemo] = useState(false); useEffect(() => setDemo(DEMO), []);
   const cov = data?.coverage ?? null;
   const [tour, setTour] = useState(false);
+  const [restore, setRestore] = useState(false);
   return (
     <div className="lobby">
       <section className="hero">
@@ -37,6 +39,8 @@ export default function LobbyPage() {
             <Link className="btn gold lg" href="/table/carrot">Take a seat</Link>
             <button className="btn ghost lg" onClick={() => setMode(!demo)}>{demo ? "Leave demo" : "Try with play chips"}</button>
             <button className="btn link lg" onClick={() => setTour(true)}>▶ How it works · 20 s</button>
+          </div>
+          <div className="hero-restore"><span>Played here before?</span><button className="btn link sm" onClick={() => setRestore(true)}>Restore a session from your recovery code</button>
           </div>
           <dl className={`stats ${data ? "" : "loading"}`} aria-busy={!data}>
             <div title="Transparent outputs the house wallets ever received or sent, counted from the wallet databases.">
@@ -50,6 +54,7 @@ export default function LobbyPage() {
         </div>
         <div className="hero-art"><HeroWheel /></div>
         {tour && <Walkthrough onClose={() => setTour(false)} />}
+        {restore && <RestoreDialog onClose={() => setRestore(false)} />}
       </section>
 
       <section className="games" aria-labelledby="games-h">
