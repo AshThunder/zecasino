@@ -819,3 +819,56 @@ body.demo-mode .mode-switch button.on { background: #8fb4ff; color: #0d1a33; }
 .t-win .t-text b { font-family: var(--font-display); font-size: 1.1rem; color: #F4B728; }
 @media (max-width: 640px) { .toaster { top: auto; bottom: 14px; right: 12px; left: 12px; width: auto; } }
 @media (prefers-reduced-motion: reduce) { .toast .t-bar { display: none; } }
+/* chip rack: never spill past its column; scrolls (with edge fade) when there is no room */
+.table-controls { min-width: 0; }
+.rack { max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; padding-top: 14px; flex-shrink: 1;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%); }
+.rack::-webkit-scrollbar { display: none; }
+.rack button { flex: 0 0 auto; scroll-snap-align: center; }
+/* matched stake picker */
+.stake-pick { display: grid; gap: 6px; }
+.stake-pick > small { font-size: .62rem; letter-spacing: .16em; text-transform: uppercase; color: #CFE5D8aa; }
+.sp-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-row button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid #ffffff1f; background: #0B0B0C88; color: #F5F1E6; font-size: .8rem; cursor: pointer; transition: border-color .15s, background .15s; position: relative; }
+.sp-row button:hover:not(:disabled) { border-color: #E9C46A88; }
+.sp-row button.on { border-color: var(--gold); background: #2a210c; box-shadow: 0 0 0 1px var(--gold), 0 0 16px -4px #F4B72899; }
+.sp-row button:disabled { opacity: .55; cursor: default; }
+.sp-wait { font-style: normal; font-size: .62rem; color: #6FD39B; margin-left: 2px; }
+.lp-lobby { display: grid; justify-items: center; gap: 12px; }
+.seat.bottom .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; }
+/* typed amount */
+.amount { display: grid; grid-template-columns: auto auto; gap: 4px 8px; align-items: end; }
+.amount label small { display: block; font-size: .62rem; letter-spacing: .16em; text-transform: uppercase; color: #CFE5D8aa; margin-bottom: 4px; }
+.amt-field { display: flex; align-items: center; gap: 6px; background: #0B0B0C; border: 1px solid #E9C46A55; border-radius: 10px; padding: 0 10px; height: 42px; }
+.amt-field i { font-style: normal; color: var(--gold); }
+.amt-field input { width: 6.5ch; background: none; border: 0; color: #F5F1E6; font: 500 1.1rem var(--font-mono); outline: none; }
+.amount.bad .amt-field { border-color: #E76F51; }
+.amt-field:focus-within { border-color: var(--gold); box-shadow: 0 0 0 3px #F4B72826; }
+.amt-quick { display: flex; gap: 4px; } .amt-quick .btn { min-width: 40px; height: 42px; }
+.amt-hint { grid-column: 1 / -1; color: #E76F51; font-size: .72rem; }
+/* hold'em raise */
+.raise-quick { display: inline-flex; gap: 4px; margin-left: 6px; } .raise-quick .btn.on { border-color: var(--gold); color: var(--gold); }
+.raise input[type=range] { accent-color: #F4B728; }
+@media (max-width: 640px) {
+  .raise { flex-wrap: wrap; } .raise-quick { margin: 6px 0 0; width: 100%; } .raise-quick .btn { flex: 1; }
+  .amount { grid-template-columns: 1fr; } .amt-field input { width: 100%; } .amt-quick .btn { flex: 1; }
+  .sp-row button { font-size: .74rem; }
+}
+/* tablet header: keep the essentials in one row */
+@media (max-width: 1100px) and (min-width: 641px) {
+  .hdr { gap: 12px; } .hdr-right { margin-left: auto; gap: 10px; min-width: 0; }
+  .shield-pill { font-size: 0; gap: 0; padding: 8px; } .shield-pill svg { width: 16px; height: 18px; }
+  .tag { display: none; }
+}
+/* narrow phones */
+@media (max-width: 400px) {
+  .fair, .sol-mine, .fair.mp { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .fair.mp .mp-steps { grid-template-columns: minmax(0, 1fr); }
+  .boxes .cbox { width: 31vw !important; height: 29vw !important; }
+  .seat { max-width: 100%; min-width: 0; } .seat > div { min-width: 0; }
+  .side-col, .table-page > * { min-width: 0; max-width: 100%; }
+}
+.sol-mine .btn { max-width: 100%; white-space: normal; }
+@media (max-width: 1100px) { .felt-arc { width: 100%; max-width: 100%; height: auto; } }
+.table-page > *, .felt, .crash-felt { min-width: 0; }
+.bust-strip { max-width: 100%; overflow: hidden; }

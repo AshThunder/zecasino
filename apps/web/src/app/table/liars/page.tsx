@@ -1,4 +1,5 @@
 "use client";
+import { StakePicker } from "@/components/StakePicker";
 import { useErrToast } from "@/lib/useErrToast";
 import { readable } from "@/lib/seed";
 import { WaitingScene } from "@/components/WaitingScene";
@@ -12,13 +13,13 @@ import { DiceCup } from "@/components/DiceCup";
 import { Chip, ChipStack } from "@/components/Chip";
 import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
-import { getClient, toZat } from "@/lib/server";
+import { getClient, toZat, ZAT } from "@/lib/server";
 import { pvpCommit, unhex } from "@/lib/fair";
 import { record, toHex } from "@/lib/history";
 
 type P = { anon: string; name: string; dice: number[] | null; commitment: string; salt?: string; ok?: boolean; chip: number; me?: boolean };
 type Bid = { q: number; f: number; by: string };
-const STAKE = 0.05;
+const STAKES = [0.01, 0.02, 0.05, 0.08, 0.1, 0.25];
 const hexb = (b: Uint8Array) => Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
 const roll5 = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), b => (b % 6) + 1);
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen"];
@@ -29,6 +30,7 @@ const anonTag = () => hexb(crypto.getRandomValues(new Uint8Array(2)));
 const seal = async (dice: number[], salt: Uint8Array) => pvpCommit(salt, new Uint8Array(dice));
 
 export default function Liars() {
+  const [stake, setStake] = useState(0.05);
   const scope = useRef<HTMLDivElement>(null);
   const [players, setPlayers] = useState<P[]>([]);
   const [phase, setPhase] = useState<"lobby" | "roll" | "bid" | "reveal">("roll");
@@ -91,7 +93,7 @@ export default function Liars() {
     getClient().then(c => {
       if (!c) return;
       offs = [
-        c.on("liars_start", async m => {
+        c.on("liars_start", async m => { if (m.stake) setStake(m.stake / ZAT);
           setSearching(false); setRoom(m.room);
           const mineOk = (await pvpCommit(unhex(m.salt), new Uint8Array(m.dice))) === m.commitments[m.seat].commitment;
           setPlayers((m.commitments as { anon: string; commitment: string }[]).map((cm, i) => ({ anon: cm.anon, name: i === m.seat ? "You" : `anon · ${cm.anon}`, dice: i === m.seat ? m.dice : null, commitment: cm.commitment, chip: i === m.seat ? 0.5 : 0.05, me: i === m.seat, ok: i === m.seat ? mineOk : undefined })));
@@ -121,13 +123,13 @@ export default function Liars() {
 
   const sitDown = async () => {
     const c = await getClient(); if (!c) return;
-    try { setErr(null); setSearching(true); await c.rpc({ t: "liars_join", stake: toZat(STAKE) }); } catch (e) { setSearching(false); setErr((e as Error).message); }
+    try { setErr(null); setSearching(true); await c.rpc({ t: "liars_join", stake: toZat(stake) }); } catch (e) { setSearching(false); setErr((e as Error).message); }
   };
 
   const reveal = contextSafe((opened: P[], r: NonNullable<typeof result>) => {
     setPlayers(opened); setResult(r); setPhase("reveal"); play("die", 0.7);
     gsap.to(".lp:not(.me) .cup", { y: -90, rotation: -8, opacity: 0.25, duration: 0.7, ease: "power3.out", stagger: 0.12 });
-    if (r.youWon) setTimeout(() => celebrate(STAKE * opened.length * 0.98, document.querySelector(".liars-felt")), 700); else play("collide", 0.6);
+    if (r.youWon) setTimeout(() => celebrate(stake * opened.length * 0.98, document.querySelector(".liars-felt")), 700); else play("collide", 0.6);
   });
   const placeBid = async () => {
     if (turn !== 0 || (bid && (q < bid.q || (q === bid.q && f <= bid.f)))) return;
@@ -147,7 +149,7 @@ export default function Liars() {
   });
 
   const me = players.find(p => p.me), others = players.filter(p => !p.me);
-  const verdictText = result ? `${result.caller} called liar on ${WORDS[result.bid.q]} ${plural(result.bid.f)}. There ${result.count === 1 ? "is" : "are"} ${WORDS[result.count]}. ${result.youWon ? `You win ⓩ ${(STAKE * players.length * 0.98).toFixed(4)}.` : `${result.winner} wins the pot.`}` : null;
+  const verdictText = result ? `${result.caller} called liar on ${WORDS[result.bid.q]} ${plural(result.bid.f)}. There ${result.count === 1 ? "is" : "are"} ${WORDS[result.count]}. ${result.youWon ? `You win ⓩ ${(stake * players.length * 0.98).toFixed(4)}.` : `${result.winner} wins the pot.`}` : null;
   const myTurn = phase === "bid" && turn === 0;
   return (
     <div ref={scope} className="table-page liars-page">
@@ -167,13 +169,13 @@ export default function Liars() {
         </div>
         <div className="lp-center">
           {verdictText ? <div className="result-toast verdict" role="status"><span>{verdictText}</span></div> : <>
-          <ChipStack values={Array(Math.max(players.length, 2)).fill(STAKE)} size={46} />
+          <ChipStack values={Array(Math.max(players.length, 2)).fill(stake)} size={46} />
           <div className="bid-card">
             {bid ? <><small>{bid.by} bids</small><b>{WORDS[bid.q]} × </b><Die value={bid.f} size={40} /></> : <small>{phase === "lobby" ? "Sit down to get matched with another player" : phase === "bid" ? (turn === 0 ? "Your opening bid" : "Waiting for the opening bid") : "Shake your cup to start the round"}</small>}
           </div></>}
         </div>
         
-        {phase === "lobby" && <div className="lp-lobby"><button className="btn gold lg" onClick={sitDown} disabled={searching}>{searching ? "Finding a player…" : `Sit down · ⓩ ${STAKE.toFixed(3)}`}</button><small>Heads-up · server-dealt dice, sealed before the first bid</small></div>}
+        {phase === "lobby" && <div className="lp-lobby"><StakePicker options={STAKES} value={stake} onChange={setStake} disabled={searching} /><button className="btn gold lg" onClick={sitDown} disabled={searching}>{searching ? "Finding a player…" : `Sit down · ⓩ ${stake.toFixed(3)}`}</button><small>Heads-up · server-dealt dice, sealed before the first bid</small></div>}
         {me && (
           <div className="lp me">
             <div className="tray">

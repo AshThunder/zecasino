@@ -2,8 +2,8 @@
 import { useErrToast } from "@/lib/useErrToast";
 import { HowTo } from "@/components/HowTo";
 import gsap from "gsap";
-import { useEffect, useRef, useState } from "react";
-import { ChipRack } from "@/components/ChipRack";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AmountInput } from "@/components/AmountInput";
 import { ChipStack } from "@/components/Chip";
 import { HouseFair } from "@/components/HouseFair";
 import { record } from "@/lib/history";
@@ -13,7 +13,7 @@ import { useSeat } from "@/lib/house";
 import { multAt, msFor, curve } from "@/lib/crash";
 import { celebrate, flyChips, reducedMotion } from "@/lib/motion";
 import { play } from "@/lib/sfx";
-import { getClient, toZat, ZAT } from "@/lib/server";
+import { getClient, serverState, toZat, ZAT } from "@/lib/server";
 import { games, unhex, verifySeed } from "@/lib/fair";
 
 type Phase = "betting" | "running" | "busted";
@@ -22,8 +22,8 @@ const W = 560, H = 400;
 
 export default function Crash() {
   const seat = useSeat();
-  const [chip, setChip] = useState(0.01);
-  const [stack, setStack] = useState<number[]>([0.01]);
+  const [stake, setStake] = useState(0.01);
+  const live = useSyncExternalStore(serverState.subscribe, serverState.get, serverState.server);
   const [auto, setAuto] = useState(2);
   const [phase, setPhase] = useState<Phase>("betting");
   const [count, setCount] = useState(6);
@@ -87,7 +87,6 @@ export default function Crash() {
     })();
     return () => { alive = false; offs.forEach(f => f()); };
   }, [remote]);
-  const stake = stack.reduce((a, b) => a + b, 0);
 
   // betting countdown
   useEffect(() => {
@@ -232,12 +231,9 @@ export default function Crash() {
           </div>
         </div>
         <div className="table-controls">
-          <ChipRack value={chip} onChange={setChip} />
           <div className="ctl">
-            <button className="bet-spot" onClick={e => { if (!joined) { setStack(s => [...s, chip]); flyChips([chip], document.querySelector(".rack .on"), e.currentTarget, { sound: false }); play("chip"); } }} disabled={joined} aria-label="Add chip to bet"><ChipStack values={stack} size={52} /></button>
-            <div className="bet-total"><small>Bet</small><b>ⓩ {stake.toFixed(3)}</b></div>
+            <AmountInput value={stake} onChange={setStake} min={0.001} max={Math.min(0.5, live.balance ?? 0.5)} disabled={joined} />
             <label className="auto"><small>Auto cash-out</small><span><input type="number" min={1.01} max={999.99} step={0.1} value={auto} onChange={e => setAuto(Number(e.target.value))} disabled={joined} />×</span></label>
-            <button className="btn ghost" onClick={() => setStack([])} disabled={joined}>Clear</button>
             {phase === "running" && mine && !mine.out
               ? <button className="btn gold lg cash" onClick={cashOut}>Cash out ⓩ {(mine.bet * mult).toFixed(4)}</button>
               : <button className="btn gold lg" onClick={join} disabled={phase !== "betting" || joined || stake === 0}>{joined ? "Bet placed" : phase === "betting" ? "Bet next round" : "Wait for next round"}</button>}

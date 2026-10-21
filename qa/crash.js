@@ -8,7 +8,7 @@ const q = require("./lib");
   const waitBetting = () => p.getByRole("button", { name: "Bet next round" }).waitFor({ timeout: 90000 });
   // manual cash-out
   await auto.fill("1"); await waitBetting();
-  await p.getByRole("button", { name: "Add chip to bet" }).click(); await p.getByRole("button", { name: "Bet next round" }).click();
+  await p.getByRole("button", { name: "2×" }).click(); await p.getByRole("button", { name: "Bet next round" }).click();
   const cash = p.getByRole("button", { name: /Cash out/ });
   let manual = "busted before cash-out";
   try { await cash.waitFor({ timeout: 20000 }); await p.waitForTimeout(300); await cash.click(); manual = "cashed"; } catch {}

@@ -1,4 +1,5 @@
 "use client";
+import { StakePicker } from "@/components/StakePicker";
 import { useErrToast } from "@/lib/useErrToast";
 import { readable } from "@/lib/seed";
 import { WaitingScene } from "@/components/WaitingScene";
@@ -13,7 +14,7 @@ import { ChipStack, Chip } from "@/components/Chip";
 import { FairPanel } from "@/components/FairPanel";
 import { record, toHex } from "@/lib/history";
 import { VerifiedRound } from "@/components/Verified";
-import { getClient, toZat } from "@/lib/server";
+import { getClient, toZat, ZAT } from "@/lib/server";
 import { hex, pvpCommit, unhex } from "@/lib/fair";
 import { celebrate, flyChips, chipsFor } from "@/lib/motion";
 import { play } from "@/lib/sfx";
@@ -23,10 +24,11 @@ const LINES = ["I've got the carrot.", "Mine's empty. Want to swap?", "You shoul
 const STEPS: [Phase, string][] = [["peek", "Peek"], ["bluff", "Bluff"], ["decide", "Keep or swap"], ["reveal", "Reveal"]];
 
 type Role = "holder" | "guesser";
-const STAKE = 0.08;
+const STAKES = [0.01, 0.02, 0.05, 0.08, 0.1, 0.25];
 const short = (h: string) => (h ? readable(h) : "…");
 
 export default function CarrotTable() {
+  const [stake, setStake] = useState(0.08);
   const scope = useRef<HTMLDivElement>(null);
   const myLid = useRef<SVGGElement>(null), theirLid = useRef<SVGGElement>(null);
   const [phase, setPhase] = useState<Phase>("peek");
@@ -72,7 +74,7 @@ export default function CarrotTable() {
     getClient().then(c => {
       if (!c) return;
       offs = [
-        c.on("carrot_start", m => { setSearching(false); setRoom(m.room); setRole(m.role); setOpp(m.opponent); setSeal({ commitment: m.commitment }); setInHolder(m.peek ? m.peek === "carrot" : null); setPhase(m.role === "holder" ? "peek" : "bluff"); play("chip", 0.5); }),
+        c.on("carrot_start", m => { setSearching(false); if (m.stake) setStake(m.stake / ZAT); setRoom(m.room); setRole(m.role); setOpp(m.opponent); setSeal({ commitment: m.commitment }); setInHolder(m.peek ? m.peek === "carrot" : null); setPhase(m.role === "holder" ? "peek" : "bluff"); play("chip", 0.5); }),
         c.on("carrot_say", m => { setSaid(m.line); setPhase("decide"); play("chip", 0.3); }),
         c.on("carrot_reveal", async m => { setSwap(m.swap); await openSeal(m.opening); setTimeout(() => { setPhase("reveal"); if (m.you_won) celebrate(m.pot / 1e8, document.querySelector(".carrot-felt"), { label: "The carrot is yours" }); else play("collide", 0.5); }, m.swap ? 900 : 300); }),
       ];
@@ -83,7 +85,7 @@ export default function CarrotTable() {
 
   const findOpponent = async () => {
     const c = await getClient(); if (!c) return;
-    try { setErr(null); setSearching(true); await c.rpc({ t: "carrot_join", stake: toZat(STAKE) }); }
+    try { setErr(null); setSearching(true); await c.rpc({ t: "carrot_join", stake: toZat(stake) }); }
     catch (e) { setSearching(false); setErr((e as Error).message); }
   };
 
@@ -148,7 +150,7 @@ export default function CarrotTable() {
             <CarrotBox width={230} lidRef={theirLid} label="Opponent's box">{<div className="carrot-in"><Carrot width={110} /></div>}</CarrotBox>
             <span className="box-label">Their box</span>
           </div>
-          <div className="pot"><ChipStack values={[0.05, 0.05, 0.05, 0.01]} size={52} /><span>Pot ⓩ {(STAKE * 2).toFixed(3)}</span></div>
+          <div className="pot"><ChipStack values={[0.05, 0.05, 0.05, 0.01]} size={52} /><span>Pot ⓩ {(stake * 2).toFixed(3)}</span></div>
           <div className={`box-slot mine ${(phase === "reveal" && carrotHere("mine")) ? "has-carrot" : ""}`}>
             <CarrotBox width={230} lidRef={myLid} label="Your box">{(carrotInMine && (peeked || phase === "reveal")) || phase === "reveal" ? <div className="carrot-in"><Carrot width={110} /></div> : null}</CarrotBox>
             <span className="box-label">Your box {peeked && phase !== "reveal" && <em>only you saw inside</em>}</span>
@@ -159,7 +161,8 @@ export default function CarrotTable() {
           <span className="avatar"><Chip value={0.5} size={46} id="av-me" /></span>
           <div><b>You</b><small>{role === "holder" ? "Holder · you may peek, then bluff" : "Guesser · listen, then keep or swap"}</small></div>
           <div className="actions">
-            {waitingRoom && <button className="btn gold lg" onClick={findOpponent} disabled={searching}>{searching ? "Finding an opponent…" : `Sit down · ⓩ ${STAKE.toFixed(3)}`}</button>}
+            {waitingRoom && <StakePicker options={STAKES} value={stake} onChange={setStake} disabled={searching} />}
+            {waitingRoom && <button className="btn gold lg" onClick={findOpponent} disabled={searching}>{searching ? "Finding an opponent…" : `Sit down · ⓩ ${stake.toFixed(3)}`}</button>}
             {!waitingRoom && role === "holder" && <>
               {phase === "peek" && <button className="btn gold lg" onClick={peek} disabled={!seal.commitment}>Peek inside</button>}
               {phase === "bluff" && LINES.map((l, i) => <button key={l} className="btn ghost" onClick={() => bluff(i)}>{l}</button>)}
@@ -168,7 +171,7 @@ export default function CarrotTable() {
             {!waitingRoom && role === "guesser" && phase !== "reveal" && (phase === "decide" && swap === null
               ? <><button className="btn ghost lg" onClick={() => decide(false)}>Keep my box</button><button className="btn gold lg" onClick={() => decide(true)}>Swap boxes</button></>
               : <span className="wait">{swap === null ? "They're peeking…" : "Opening the boxes…"}</span>)}
-            {phase === "reveal" && <><span className={`outcome ${iWin ? "win" : "lose"}`}>{iWin ? `The carrot is yours. You win ⓩ ${(STAKE * 2 * 0.98).toFixed(4)}` : "They found the carrot."}</span><button className="btn gold" onClick={reset}>Next round</button></>}
+            {phase === "reveal" && <><span className={`outcome ${iWin ? "win" : "lose"}`}>{iWin ? `The carrot is yours. You win ⓩ ${(stake * 2 * 0.98).toFixed(4)}` : "They found the carrot."}</span><button className="btn gold" onClick={reset}>Next round</button></>}
           </div>
         </div>
       </div>

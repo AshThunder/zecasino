@@ -194,7 +194,12 @@ export default function Holdem() {
             <span className={`act-clock ${left <= 5 ? "low" : ""}`} title="Auto check, or fold if there is a bet, when the clock runs out">{left}s</span>
             {legal.fold && <button className="btn ghost" onClick={() => act("fold")}>Fold</button>}
             {legal.check ? <button className="btn ghost" onClick={() => act("check")}>Check</button> : <button className="btn ghost" onClick={() => act("call")}>Call ⓩ {z(legal.call)}</button>}
-            {legal.raise && <><label className="raise"><span>{legal.check ? "Bet" : "Raise to"}</span><input type="range" min={legal.raise.min} max={legal.raise.max} step={toZat(0.005)} value={raiseTo} onChange={e => setRaiseTo(+e.target.value)} /><b>ⓩ {z(raiseTo)}</b></label>
+            {legal.raise && <><label className="raise"><span>{legal.check ? "Bet" : "Raise to"}</span><input type="range" min={legal.raise.min} max={legal.raise.max} step={toZat(0.005)} value={raiseTo} onChange={e => setRaiseTo(+e.target.value)} /><b>ⓩ {z(raiseTo)}</b>
+              <span className="raise-quick">{([["Min", -1], ["½ pot", 0.5], ["Pot", 1], ["All in", 99]] as const).map(([l, f]) => {
+                const r = legal.raise!; const pot = st?.pot ?? 0; const call = legal.call ?? 0; const opBet = st?.street_bet?.[op] ?? 0;
+                const raw = f < 0 ? r.min : f > 10 ? r.max : opBet + f * (pot + call);
+                const to = Math.min(r.max, Math.max(r.min, Math.round(raw / toZat(0.005)) * toZat(0.005)));
+                return <button key={l} type="button" className={`btn ghost sm ${raiseTo === to ? "on" : ""}`} onClick={() => setRaiseTo(to)}>{l}</button>; })}</span></label>
               <button className="btn gold" onClick={() => act("raise")}>{raiseTo === legal.raise.max ? "All in" : legal.check ? "Bet" : "Raise"}</button></>}
           </>}
           {room && !legal && !result && <span className="wait">{steps.some(s => s !== "done") ? "Shuffling the deck…" : hole.length ? `anon · ${opp} to act… ${st?.to_act === op && left ? `${left}s` : ""}` : "Dealing…"}</span>}
