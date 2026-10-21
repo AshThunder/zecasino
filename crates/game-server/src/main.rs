@@ -6,6 +6,7 @@ async fn main() {
     let dev = std::env::var("ZECASINO_DEV_CREDIT").is_ok_and(|v| v == "1");
     let app = zecasino_game_server::App::new(&db, dev);
     tokio::spawn(zecasino_game_server::crash::run(app.clone()));
+    if app.zec.is_some() { tokio::spawn(zecasino_game_server::cashier::run(app.clone())); } else { tracing::warn!("ZEC_SERVICE_URL / ZEC_INTERNAL_KEY not set: cashier offline"); }
     let addr: SocketAddr = std::env::var("ZECASINO_ADDR").unwrap_or_else(|_| "127.0.0.1:3200".into()).parse().unwrap();
     tracing::info!(%addr, dev_credit = dev, "game server listening");
     // No per-connection logging: we never record client IPs.

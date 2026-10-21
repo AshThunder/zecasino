@@ -1,6 +1,7 @@
 //! Zecasino game server. One websocket per browser tab; all messages are JSON `{ "t": ... }`.
 //! Privacy: no IPs are logged or stored, sessions are bearer tokens stored hashed, and other
 //! players only ever see a short per-room `anon` tag.
+pub mod cashier;
 pub mod crash;
 pub mod house;
 pub mod ledger;
@@ -34,6 +35,7 @@ pub struct App {
     liars_wait: Mutex<Vec<Waiting>>,
     liars: Mutex<HashMap<String, Liars>>,
     pub dev_credit: bool,
+    pub zec: Option<cashier::Zec>,
 }
 
 fn rid() -> String { let mut b = [0u8; 8]; rand::rngs::OsRng.fill_bytes(&mut b); hex::encode(b) }
@@ -46,11 +48,14 @@ impl App {
         Arc::new(Self {
             ledger: Mutex::new(Ledger::open(db).expect("ledger")), seats: Default::default(), hands: Default::default(),
             crash: Mutex::new(crash::Crash::new()), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
-            liars_wait: Default::default(), liars: Default::default(), dev_credit,
+            liars_wait: Default::default(), liars: Default::default(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
     pub async fn notify(&self, token: &str, v: Value) {
         if let Some(list) = self.conns.lock().await.get(token) { for tx in list { let _ = tx.send(v.to_string()); } }
+    }
+    pub async fn notify_session(&self, session: &str, v: Value) {
+        for (tok, list) in self.conns.lock().await.iter() { if cashier::session_matches(tok, session) { for tx in list { let _ = tx.send(v.to_string()); } } }
     }
     async fn seat_view(&self, token: &str) -> Value {
         let s = self.seats.lock().await; let p = &s[token];
@@ -125,6 +130,25 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             json!({ "t": "balance", "id": id, "balance": b })
         }
         "seat_get" => json!({ "t": "seat", "id": id, "seat": app.seat_view(tok).await }),
+        "cashier_deposit" => {
+            let zec = app.zec.as_ref().ok_or("cashier offline")?;
+            let idx = app.ledger.lock().await.deposit_index(tok);
+            let cached = app.ledger.lock().await.cached_deposit_address(idx);
+            let addr = match cached { Some(a) => a, None => {
+                let a = zec.address(idx).await.map_err(|_| "cashier offline")?;
+                app.ledger.lock().await.set_deposit_address(idx, &a); a } };
+            json!({ "t": "deposit_address", "id": id, "address": addr, "confirmations": cashier::CONFIRMATIONS })
+        }
+        "cashier_withdraw" => {
+            let zec = app.zec.as_ref().ok_or("cashier offline")?;
+            let addr = v["address"].as_str().unwrap_or("").trim();
+            if !cashier::shielded_address(addr) { return Err("withdrawals go to a shielded address only (u1… / zs1…)"); }
+            if stake < cashier::MIN_WITHDRAW { return Err("minimum withdrawal is 0.001 TAZ"); }
+            let _ = zec;
+            let delay = match v["delay"].as_str().unwrap_or("random") { "now" => 0, "6h" => cashier::delay_between(0, 6 * 3600), _ => cashier::delay_between(300, 3600) };
+            let (_wid, bal) = app.ledger.lock().await.queue_withdrawal(tok, addr, stake, cashier::now() + delay).map_err(lerr)?;
+            json!({ "t": "withdraw_queued", "id": id, "balance": bal, "eta_s": delay })
+        }
         "balance" => json!({ "t": "balance", "id": id, "balance": app.ledger.lock().await.balance(tok).map_err(lerr)? }),
         "seed" => {
             app.seats.lock().await.get_mut(tok).unwrap().set_client_seed(v["client_seed"].as_str().unwrap_or("")).map_err(|_| "bad client seed")?;
