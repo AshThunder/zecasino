@@ -10,6 +10,7 @@
 | Carrot and wooden box | apps/web/src/components/Carrot.tsx, Box.tsx | Original SVG | MIT |
 | Dice faces, dice cup | apps/web/src/components/Die.tsx, DiceCup.tsx | Original SVG | MIT |
 | Blackjack shoe, printed felt arc text | apps/web/src/components/CardShoe.tsx, FeltArc.tsx | Original SVG | MIT |
+| Hold'em racetrack table, mental-poker deck/lock graphics | apps/web/src/app/table/holdem, globals.css | Original SVG/CSS | MIT |
 | Felt texture | CSS/SVG feTurbulence noise | Original | MIT |
 | Roulette ball roll sound | synthesised at runtime with Web Audio (no file) | Original | MIT |
 | Fonts: Cormorant Garamond, Manrope | via @fontsource packages (self-hosted, no third-party requests) | Google Fonts / Fontsource | SIL OFL 1.1 |
