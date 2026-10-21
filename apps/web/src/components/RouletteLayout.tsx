@@ -22,7 +22,7 @@ export function RouletteLayout({ bets, onBet, highlight }: { bets: Record<BetKey
       {cells.map(c => {
         const lit = highlight != null && c.key === `n:${highlight}`;
         return (
-          <g key={c.key} className="lcell" onClick={() => onBet(c.key)} role="button" aria-label={`Bet ${c.label}`} tabIndex={0}
+          <g key={c.key} className="lcell" onClick={() => onBet(c.key)} role="button" aria-label={`Bet ${c.key === "red" ? "Red" : c.key === "black" ? "Black" : c.label}`} tabIndex={0}
              onKeyDown={e => (e.key === "Enter" || e.key === " ") && onBet(c.key)}>
             {c.key === "n:0"
               ? <path d={`M${c.x + c.w} ${c.y}H${c.x + 18}L${c.x} ${c.y + c.h / 2}L${c.x + 18} ${c.y + c.h}H${c.x + c.w}Z`} fill={c.fill} stroke="#E9DFC6" strokeWidth="2" />

@@ -29,7 +29,11 @@ export default function Blackjack() {
   const { contextSafe } = useGSAP({ scope });
   const stake = bet.reduce((a, b) => a + b, 0);
 
-  useEffect(() => { if (!seat.ready) return; (async () => { dealerRef.current = (seat.remote ? await remoteDealer() : null) ?? localDealer(seat); })(); }, [seat.ready, seat.remote]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!seat.ready) return; (async () => {
+    dealerRef.current = (seat.remote ? await remoteDealer() : null) ?? localDealer(seat);
+    const open = await dealerRef.current.resume?.();
+    if (open) { seedAtDeal.current = seat.commitment; setBet([open.stake]); setPlayer([]); setDealer([]); setPhase("dealer"); show(open, { p: 0, d: 0 }); }
+  })(); }, [seat.ready, seat.remote]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const animateLast = contextSafe((sel: string) => {
     requestAnimationFrame(() => {
@@ -54,7 +58,6 @@ export default function Blackjack() {
     setTimeout(() => {
       if (!v.done) { setPhase("player"); return; }
       setPhase("done"); setMsg(v.message); play(v.payout > v.stake ? "stack" : "collide", 0.6);
-      if (v.stake > stake) setBet(b => [...b, ...b]);
       setHands(h => [{ nonce: v.nonce, outcome: drawOrder(v), seed: seedAtDeal.current }, ...h].slice(0, 20));
     }, t + 420);
   };

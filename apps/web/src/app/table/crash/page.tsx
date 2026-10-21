@@ -61,6 +61,7 @@ export default function Crash() {
           setChecked(x => [{ round: m.round, bust: m.bust / 100, ok }, ...x].slice(0, 6));
         }),
       ];
+      offs.push(c.on("reconnected", () => { getClient().then(n => n?.send({ t: "crash_sub" })); }));
       c.send({ t: "crash_sub" });
     })();
     return () => { alive = false; offs.forEach(f => f()); };

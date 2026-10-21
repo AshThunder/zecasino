@@ -11,7 +11,7 @@ const DEV_CREDIT = process.env.NEXT_PUBLIC_DEV_CREDIT === "1";
 
 class Client {
   ws: WebSocket; seq = 0; pending = new Map<number, { ok: (m: Msg) => void; no: (e: Error) => void }>();
-  subs = new Map<string, Set<(m: Msg) => void>>(); session: Msg | null = null;
+  subs = SUBS; session: Msg | null = null;
   constructor(ws: WebSocket) {
     this.ws = ws;
     ws.onmessage = e => {
@@ -21,12 +21,34 @@ class Client {
       if (p) { this.pending.delete(m.id); m.t === "error" ? p.no(new Error(m.error)) : p.ok(m); }
       this.subs.get(m.t)?.forEach(f => f(m));
     };
-    ws.onclose = () => { client = null; status = "offline"; emit(); };
+    ws.onclose = () => {
+      // Fail in-flight calls instead of leaving them hanging, then reconnect with the same token.
+      this.pending.forEach(p => p.no(new Error("connection lost, reconnecting…"))); this.pending.clear();
+      const was = client === this; if (was) { client = null; status = "offline"; emit(); }
+      if (was) reconnect(1);
+    };
   }
-  rpc(m: Msg): Promise<Msg> { const id = ++this.seq; this.ws.send(JSON.stringify({ ...m, id })); return new Promise((ok, no) => this.pending.set(id, { ok, no })); }
-  send(m: Msg) { this.ws.send(JSON.stringify(m)); }
+  /** Pages may hold a client from before a reconnect; calls are routed to the live connection. */
+  private live(): Client | null { return this.ws.readyState === WebSocket.OPEN ? this : client && client !== this ? client.live() : null; }
+  rpc(m: Msg): Promise<Msg> {
+    const c = this.live(); if (!c) return Promise.reject(new Error("offline, reconnecting…"));
+    const id = ++c.seq; c.ws.send(JSON.stringify({ ...m, id })); return new Promise((ok, no) => c.pending.set(id, { ok, no }));
+  }
+  send(m: Msg) { this.live()?.ws.send(JSON.stringify(m)); }
   on(t: string, f: (m: Msg) => void) { if (!this.subs.has(t)) this.subs.set(t, new Set()); this.subs.get(t)!.add(f); return () => { this.subs.get(t)!.delete(f); }; }
 }
+
+const SUBS = new Map<string, Set<(m: Msg) => void>>();
+function reconnect(attempt: number) {
+  setTimeout(async () => {
+    const c = await getClient();
+    if (c) SUBS.get("reconnected")?.forEach(f => f({ t: "reconnected" }));
+    else if (attempt < 30) reconnect(attempt + 1);
+  }, Math.min(500 * attempt, 5000));
+}
+if (typeof window !== "undefined") (window as unknown as { __zc: unknown }).__zc = { drop: () => client?.ws.close() }; // QA hook: simulate a dropped connection
+export const SESSION_KEY = "zc.session", KEEP_KEY = "zc.session.keep";
+export const storedToken = () => sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(KEEP_KEY) ?? undefined;
 
 let client: Client | null = null; let connecting: Promise<Client | null> | null = null;
 let status: "offline" | "online" = "offline"; let balance: number | null = null;
@@ -48,8 +70,8 @@ export function getClient(clientSeed = "zecasino"): Promise<Client | null> {
     ws.onopen = async () => {
       clearTimeout(timer);
       const c = new Client(ws);
-      const s = await c.rpc({ t: "hello", token: sessionStorage.getItem("zc.session") ?? undefined, client_seed: clientSeed });
-      sessionStorage.setItem("zc.session", s.token); c.session = s;
+      const s = await c.rpc({ t: "hello", token: storedToken(), client_seed: clientSeed });
+      sessionStorage.setItem(SESSION_KEY, s.token); if (localStorage.getItem(KEEP_KEY)) localStorage.setItem(KEEP_KEY, s.token); c.session = s;
       if (DEV_CREDIT && s.balance === 0) await c.rpc({ t: "dev_credit", amount: toZat(0.412) });
       client = c; status = "online"; connecting = null; emit(); resolve(c);
     };

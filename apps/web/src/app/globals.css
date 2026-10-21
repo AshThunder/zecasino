@@ -463,3 +463,13 @@ html:has(.cashier[open]) { overflow: hidden; }
 .vk-actions { margin: 12px 0; }
 .vk-cmd { background: #0B0B0C; border: 1px solid #ffffff1a; border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #C9C1AE; white-space: pre-wrap; }
 .liars-page .result-toast.verdict { position: static; translate: none; max-width: 560px; text-align: center; padding: 12px 24px; }
+button.shield-pill { cursor: pointer; font: inherit; }
+.hdr-right { position: relative; }
+.session-key { position: absolute; top: 52px; right: 0; width: 440px; z-index: 50; padding: 18px 20px; border-radius: 16px; background: #0E0D0B; border: 1px solid #F4B72855; box-shadow: 0 30px 60px -20px #000; }
+.session-key h4 { margin: 0 0 6px; font-family: var(--font-display); font-size: 1.2rem; }
+.session-key p { font-size: 13px; color: #A89F8C; margin: 0 0 12px; }
+.sk-row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.sk-row code { flex: 1; font-size: 12px; word-break: break-all; color: var(--gold-hi); }
+.sk-row input { flex: 1; background: #0B0B0C; border: 1px solid #ffffff22; border-radius: 8px; color: #EEE; padding: 8px 10px; font-size: 12px; }
+.sk-keep { font-size: 13px; color: #C9C1AE; display: flex; gap: 8px; align-items: center; }
+.sk-close { position: absolute; top: 10px; right: 12px; background: none; border: 0; color: #A89F8C; font-size: 20px; cursor: pointer; }

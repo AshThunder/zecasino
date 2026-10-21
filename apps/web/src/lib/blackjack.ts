@@ -5,7 +5,7 @@ import type { useSeat } from "./house";
 
 /** What the table shows. `dealer` has only the up-card until the hand is done (the server never sends the hole card early). */
 export type HandView = { nonce: number; player: number[]; dealer: number[]; done: boolean; payout: number; stake: number; message: string | null };
-export interface Dealer { deal(stake: number): Promise<HandView>; act(a: "hit" | "stand" | "double"): Promise<HandView> }
+export interface Dealer { deal(stake: number): Promise<HandView>; act(a: "hit" | "stand" | "double"): Promise<HandView>; resume?(): Promise<HandView | null> }
 
 /** Same rules as crates/game-server/src/house.rs. */
 function settle(player: number[], dealer: number[], draw: () => number, stake: number): [number, string] {
@@ -51,6 +51,7 @@ export async function remoteDealer(): Promise<Dealer | null> {
   return {
     deal: async stake => conv(await c.rpc({ t: "bj_deal", stake: toZat(stake) })),
     act: async a => conv(await c.rpc({ t: `bj_${a}` })),
+    resume: async () => { const m = await c.rpc({ t: "bj_get" }); return m.hand ? conv(m) : null; },
   };
 }
 

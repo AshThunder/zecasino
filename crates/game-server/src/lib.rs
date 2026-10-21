@@ -229,6 +229,11 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             app.hands.lock().await.insert(tok.to_owned(), h);
             json!({ "t": "bj", "id": id, "hand": view, "balance": bal, "seat": app.seat_view(tok).await })
         }
+        // Lets a refreshed or reconnected tab pick up an open hand instead of leaving the stake stuck.
+        "bj_get" => {
+            let hands = app.hands.lock().await;
+            json!({ "t": "bj", "id": id, "hand": hands.get(tok).filter(|h| !h.done).map(|h| h.view(0, None)) })
+        }
         "bj_hit" | "bj_stand" | "bj_double" => {
             let mut hands = app.hands.lock().await;
             let h = hands.get_mut(tok).filter(|h| !h.done).ok_or("no active hand")?;
