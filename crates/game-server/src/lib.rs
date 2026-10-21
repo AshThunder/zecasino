@@ -59,9 +59,13 @@ fn lerr(e: LedgerError) -> &'static str { match e { LedgerError::Insufficient =>
 
 impl App {
     pub fn new(db: &str, dev_credit: bool) -> Arc<Self> {
+        let mut ledger = Ledger::open(db).expect("ledger");
+        // Restart safety: void any crash round that never reached its bust, then keep counting rounds.
+        for (sess, round, stake) in ledger.crash_refund_open() { tracing::info!(session = %&sess[..8], round, stake, "refunded crash bet from interrupted round"); }
+        let first_round = ledger.next_crash_round();
         Arc::new(Self {
-            ledger: Mutex::new(Ledger::open(db).expect("ledger")), seats: Default::default(), hands: Default::default(),
-            crash: Mutex::new(crash::Crash::new()), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
+            ledger: Mutex::new(ledger), seats: Default::default(), hands: Default::default(),
+            crash: Mutex::new(crash::Crash::new(first_round)), conns: Default::default(), carrot_wait: Default::default(), carrots: Default::default(),
             liars_wait: Default::default(), liars: Default::default(), holdem_wait: Default::default(), holdems: Default::default(), solvency: Default::default(), hm_act_ms: 30_000.into(), pvp_idle_ms: 60_000.into(), replay: Default::default(), pvp_seen: Default::default(), hm_proto_ms: 20_000.into(), dev_credit, zec: cashier::Zec::from_env(),
         })
     }
@@ -77,6 +81,12 @@ impl App {
     async fn seat_view(&self, token: &str) -> Value {
         let s = self.seats.lock().await; let p = &s[token];
         json!({ "commitment": p.commitment, "client_seed": p.client_seed, "nonce": p.nonce })
+    }
+    /// Seat (seed pair + nonce) and open blackjack hand, written after every bet so a restart resumes them.
+    pub async fn persist_seat(&self, token: &str) {
+        let seat = self.seats.lock().await.get(token).and_then(|p| serde_json::to_string(p).ok());
+        let hand = self.hands.lock().await.get(token).filter(|h| !h.done).and_then(|h| serde_json::to_string(h).ok());
+        if let Some(seat) = seat { self.ledger.lock().await.save_seat(token, &seat, hand.as_deref()); }
     }
     async fn debit(&self, token: &str, stake: u64, r: &str) -> Result<u64, &'static str> {
         if stake == 0 || stake > MAX_STAKE { return Err("stake out of range"); }
@@ -138,6 +148,13 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
             let cs = v["client_seed"].as_str().unwrap_or("zecasino");
             let tok = match v["token"].as_str() { Some(k) if app.ledger.lock().await.exists(k) => k.to_owned(), _ => app.ledger.lock().await.create() };
             let mut seats = app.seats.lock().await;
+            if !seats.contains_key(&tok) {
+                // After a restart the seat (and any open blackjack hand) comes back from the ledger DB.
+                if let Some((seat, hand)) = app.ledger.lock().await.load_seat(&tok) {
+                    if let Ok(p) = serde_json::from_str::<SeedPair>(&seat) { seats.insert(tok.clone(), p); }
+                    if let Some(h) = hand.and_then(|h| serde_json::from_str::<Hand>(&h).ok()) { app.hands.lock().await.insert(tok.clone(), h); }
+                }
+            }
             if !seats.contains_key(&tok) { match SeedPair::generate(cs) { Ok(p) => { seats.insert(tok.clone(), p); } Err(_) => { seats.insert(tok.clone(), SeedPair::generate("zecasino").unwrap()); } } }
             drop(seats);
             app.conns.lock().await.entry(tok.clone()).or_default().push(tx.clone());
@@ -148,6 +165,7 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
         }
         let Some(tok) = token.clone() else { let _ = tx.send(err(&id, "say hello first").to_string()); continue };
         let reply = match handle(&app, &tok, t, &v, &id, &tx, &mut crash_sub).await { Ok(r) => r, Err(e) => Some(err(&id, e)) };
+        if matches!(t, "seed" | "rotate" | "dice" | "roulette" | "bj_deal" | "bj_hit" | "bj_stand" | "bj_double" | "bj_split") { app.persist_seat(&tok).await; }
         if let Some(r) = reply { let _ = tx.send(r.to_string()); }
     }
     if let Some(h) = crash_sub { h.abort(); }
@@ -274,12 +292,15 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             let hands = app.hands.lock().await;
             json!({ "t": "bj", "id": id, "hand": hands.get(tok).filter(|h| !h.done).map(|h| h.view(0, None)) })
         }
-        "bj_hit" | "bj_stand" | "bj_double" => {
+        "bj_hit" | "bj_stand" | "bj_double" | "bj_split" => {
             let mut hands = app.hands.lock().await;
             let h = hands.get_mut(tok).filter(|h| !h.done).ok_or("no active hand")?;
-            if t == "bj_double" { if h.player.len() != 2 { return Err("can only double on two cards"); } app.debit(tok, h.stake, &format!("bj#{}", h.nonce)).await?; h.double(); }
-            if t == "bj_hit" { h.hit(); }
-            let finished = t != "bj_hit" || house::bj_value(&h.player).0 > 21;
+            let finished = match t {
+                "bj_double" => { if !h.can_double() { return Err("can only double on two cards"); } let a = h.hands[h.active].stake; app.debit(tok, a, &format!("bj#{}", h.nonce)).await?; h.double().unwrap() }
+                "bj_split" => { if !h.can_split() { return Err("can only split a pair, once"); } let a = h.hands[0].stake; app.debit(tok, a, &format!("bj#{}", h.nonce)).await?; h.split().unwrap() }
+                "bj_hit" => h.hit(),
+                _ => h.stand(),
+            };
             let (pay, msg) = if finished { let (p, m) = h.settle(); (p, Some(m.to_owned())) } else { (0, None) };
             let bal = app.credit(tok, pay, &format!("bj#{}", h.nonce)).await;
             json!({ "t": "bj", "id": id, "hand": h.view(pay, msg), "balance": bal })
@@ -301,7 +322,8 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             if c.phase != crash::Phase::Betting { return Err("betting closed"); }
             if c.bets.contains_key(tok) { return Err("already in this round"); }
             let round = c.round;
-            let bal = app.debit(tok, stake, &format!("crash#{round}")).await?;
+            if stake == 0 || stake > MAX_STAKE { return Err("stake out of range"); }
+            let bal = app.ledger.lock().await.crash_bet(tok, stake, round).map_err(lerr)?;
             let a = anon(); c.bets.insert(tok.to_owned(), crash::Bet { stake, auto, out: None, anon: a.clone() });
             let _ = c.tx.send(json!({ "t": "crash_join", "anon": a, "stake": stake }).to_string());
             json!({ "t": "crash_bet", "id": id, "round": round, "anon": a, "balance": bal })
@@ -314,7 +336,7 @@ async fn handle(app: &Arc<App>, tok: &str, t: &str, v: &Value, id: &Value, tx: &
             b.out = Some(m); let (amt, a) = (b.stake * m / 100, b.anon.clone());
             let _ = c.tx.send(json!({ "t": "crash_out", "anon": a, "mult": m }).to_string());
             drop(c);
-            let bal = app.credit(tok, amt, &format!("crash#{round}")).await;
+            let bal = app.ledger.lock().await.crash_cash(tok, amt, round);
             json!({ "t": "crash_cashed", "id": id, "mult": m, "payout": amt, "balance": bal })
         }
         "carrot_join" => {

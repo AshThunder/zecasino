@@ -9,7 +9,7 @@ import { CardShoe } from "@/components/CardShoe";
 import { FeltArc } from "@/components/FeltArc";
 import { HouseFair } from "@/components/HouseFair";
 import { useSeat } from "@/lib/house";
-import { localDealer, remoteDealer, drawOrder, type Dealer, type HandView } from "@/lib/blackjack";
+import { localDealer, remoteDealer, record, verifyRecord, type Action, type BjRecord, type Dealer, type HandView } from "@/lib/blackjack";
 import { bjValue, code } from "@/lib/cards";
 import { play } from "@/lib/sfx";
 
@@ -21,10 +21,14 @@ export default function Blackjack() {
   const [chip, setChip] = useState(0.01);
   const [bet, setBet] = useState<number[]>([0.05, 0.01]);
   const [dealer, setDealer] = useState<number[]>([]);
-  const [player, setPlayer] = useState<number[]>([]);
+  const [phands, setPhands] = useState<number[][]>([[]]);
+  const [active, setActive] = useState(0);
+  const [caps, setCaps] = useState({ split: false, double: false });
+  const player = phands[active] ?? [];
+  const setPlayer = (p: number[]) => { setPhands([p]); setActive(0); };
   const [phase, setPhase] = useState<Phase>("bet");
   const [msg, setMsg] = useState<string | null>(null);
-  const [hands, setHands] = useState<{ nonce: number; outcome: number[]; seed: string }[]>([]);
+  const [hands, setHands] = useState<{ nonce: number; outcome: BjRecord; seed: string }[]>([]);
   const seedAtDeal = useRef("");
   const { contextSafe } = useGSAP({ scope });
   const stake = bet.reduce((a, b) => a + b, 0);
@@ -32,7 +36,7 @@ export default function Blackjack() {
   useEffect(() => { if (!seat.ready) return; (async () => {
     dealerRef.current = (seat.remote ? await remoteDealer() : null) ?? localDealer(seat);
     const open = await dealerRef.current.resume?.();
-    if (open) { seedAtDeal.current = seat.commitment; setBet([open.stake]); setPlayer([]); setDealer([]); setPhase("dealer"); show(open, { p: 0, d: 0 }); }
+    if (open) { seedAtDeal.current = seat.commitment; setBet([open.stake]); setPlayer([]); setDealer([]); setPhase("dealer"); show(open, { hands: [[]], d: 0 }); }
   })(); }, [seat.ready, seat.remote]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const animateLast = contextSafe((sel: string) => {
@@ -41,37 +45,43 @@ export default function Blackjack() {
       gsap.fromTo(el, { x: 380, y: -220, rotation: 25, opacity: 0 }, { x: 0, y: 0, rotation: 0, opacity: 1, duration: 0.45, ease: "power3.out" });
     });
   });
-  /** Animate the table from what it shows now to the server's view, card by card. */
-  const show = (v: HandView, from: { p: number; d: number }, startDelay = 0) => {
+  /** Animate the table from what it shows now to the server's view, card by card (split hands included). */
+  const show = (v: HandView, from: { hands: number[][]; d: number }, startDelay = 0) => {
     let t = startDelay;
     const steps: (() => void)[] = [];
-    const p = v.player, d = v.dealer;
-    if (from.p === 0 && from.d === 0 && p.length >= 2) {
-      steps.push(() => { setPlayer([p[0]]); animateLast(".hand.player .pcard"); }, () => { setDealer([d[0]]); animateLast(".hand.dealer .pcard"); },
-        () => { setPlayer([p[0], p[1]]); animateLast(".hand.player .pcard"); }, () => { setDealer(v.done ? [d[0], d[1]] : [d[0], -1]); animateLast(".hand.dealer .pcard"); });
-      from = { p: 2, d: 2 };
+    const target = v.hands.length ? v.hands.map(h => h.cards) : [v.player], d = v.dealer;
+    let cur = from.hands.map(h => [...h]);
+    const push = (next: number[][], act: number, anim = true) => { const snap = next.map(h => [...h]); steps.push(() => { setPhands(snap); setActive(act); if (anim) animateLast(`.hand.player .phand:nth-child(${act + 1}) .pcard`); }); };
+    if (from.d === 0 && target[0].length >= 2) {
+      const p0 = target.length > 1 ? [target[0][0], target[1][0]] : target[0];
+      steps.push(() => { setPhands([[p0[0]]]); setActive(0); animateLast(".hand.player .pcard"); }, () => { setDealer([d[0]]); animateLast(".hand.dealer .pcard"); },
+        () => { setPhands([[p0[0], p0[1]]]); animateLast(".hand.player .pcard"); }, () => { setDealer(v.done ? [d[0], d[1]] : [d[0], -1]); animateLast(".hand.dealer .pcard"); });
+      cur = [[p0[0], p0[1]]]; from = { ...from, d: 2 };
     }
-    for (let i = from.p; i < p.length; i++) steps.push(() => { setPlayer(p.slice(0, i + 1)); animateLast(".hand.player .pcard"); });
+    if (target.length > cur.length && cur.length === 1 && cur[0].length === 2) { cur = [[cur[0][0]], [cur[0][1]]]; push(cur, 0, false); }
+    target.forEach((h, i) => { if (!cur[i]) cur[i] = []; for (let k = cur[i].length; k < h.length; k++) { cur[i] = h.slice(0, k + 1); push(cur, i); } });
     if (v.done) { if (from.d >= 2) steps.push(() => { setDealer(d.slice(0, 2)); setPhase("dealer"); });
       for (let i = Math.max(2, from.d); i < d.length; i++) steps.push(() => { setDealer(d.slice(0, i + 1)); animateLast(".hand.dealer .pcard"); }); }
     steps.forEach(f => setTimeout(() => { play("card", 0.5); f(); }, (t += 420)));
     setTimeout(() => {
-      if (!v.done) { setPhase("player"); return; }
+      setCaps({ split: v.can_split && !!dealerRef.current?.canSplit, double: v.can_double });
+      if (!v.done) { setActive(v.active); setPhase("player"); return; }
       setPhase("done"); setMsg(v.message); play(v.payout > v.stake ? "stack" : "collide", 0.6);
-      setHands(h => [{ nonce: v.nonce, outcome: drawOrder(v), seed: seedAtDeal.current }, ...h].slice(0, 20));
+      setHands(h => [{ nonce: v.nonce, outcome: record(v), seed: seedAtDeal.current }, ...h].slice(0, 20));
     }, t + 420);
   };
   const deal = async () => {
     if (stake === 0 || !dealerRef.current) return;
     seedAtDeal.current = seat.commitment;
     setPlayer([]); setDealer([]); setMsg(null); setPhase("dealer");
-    try { show(await dealerRef.current.deal(stake), { p: 0, d: 0 }); } catch (e) { setMsg((e as Error).message); setPhase("bet"); }
+    try { show(await dealerRef.current.deal(stake), { hands: [[]], d: 0 }); } catch (e) { setMsg((e as Error).message); setPhase("bet"); }
   };
-  const act = async (a: "hit" | "stand" | "double") => {
-    setPhase("dealer"); play(a === "double" ? "stack" : "slide", 0.5);
-    try { show(await dealerRef.current!.act(a), { p: player.length, d: dealer.length }, -300); } catch (e) { setMsg((e as Error).message); setPhase("player"); }
+  const act = async (a: Action) => {
+    setPhase("dealer"); play(a === "double" || a === "split" ? "stack" : "slide", 0.5);
+    if (a === "double" || a === "split") setBet(b => [...b, ...b]);
+    try { show(await dealerRef.current!.act(a), { hands: phands, d: dealer.length }, -300); } catch (e) { setMsg((e as Error).message); setPhase("player"); }
   };
-  const pv = bjValue(player), dv = bjValue(dealer.filter(c => c >= 0));
+  const dv = bjValue(dealer.filter(c => c >= 0));
 
   return (
     <div ref={scope} className="table-page bj-page">
@@ -87,9 +97,12 @@ export default function Blackjack() {
           { text: "Dealer must draw to 16 and stand on all 17's", size: 15, r: 330, color: "#F3ECDDaa" },
           { text: "INSURANCE PAYS 2 TO 1", size: 17, r: 330, color: "#E9C46Acc" },
         ]} />
-        <div className="hand player">
-          {player.map((c, i) => <PlayingCard key={i} code={code(c)} width={92} />)}
-          {player.length > 0 && <span className={`hand-total ${pv.total > 21 ? "bust" : ""}`}>{pv.soft && pv.total <= 21 ? `soft ${pv.total}` : pv.total}</span>}
+        <div className={`hand player ${phands.length > 1 ? "split" : ""}`}>
+          {phands.map((h, hi) => { const v = bjValue(h); return (
+            <div key={hi} className={`phand ${phands.length > 1 && hi === active && phase === "player" ? "active" : ""}`} data-hand={hi}>
+              {h.map((c, i) => <PlayingCard key={i} code={code(c)} width={phands.length > 1 ? 78 : 92} />)}
+              {h.length > 0 && <span className={`hand-total ${v.total > 21 ? "bust" : ""}`}>{v.soft && v.total <= 21 ? `soft ${v.total}` : v.total}</span>}
+            </div>); })}
         </div>
         <div className="bet-circle" onClick={() => phase === "bet" || phase === "done" ? (setBet(b => [...b, chip]), play("chip")) : null} role="button" aria-label="Betting circle">
           {bet.length ? <ChipStack values={bet} size={58} /> : <span>BET</span>}
@@ -100,14 +113,14 @@ export default function Blackjack() {
           <div className="ctl">
             <div className="bet-total"><small>Bet</small><b>ⓩ {stake.toFixed(3)}</b></div>
             {(phase === "bet" || phase === "done") && <><button className="btn ghost" onClick={() => setBet([])}>Clear</button><button className="btn gold lg" onClick={deal} disabled={!stake || !seat.ready}>Deal</button></>}
-            {phase === "player" && player.length >= 2 && <><button className="btn ghost" onClick={() => act("hit")}>Hit</button><button className="btn ghost" onClick={() => act("stand")}>Stand</button>{player.length === 2 && <button className="btn gold" onClick={() => act("double")}>Double</button>}</>}
+            {phase === "player" && player.length >= 2 && <><button className="btn ghost" onClick={() => act("hit")}>Hit</button><button className="btn ghost" onClick={() => act("stand")}>Stand</button>{caps.double && <button className="btn gold" onClick={() => act("double")}>Double</button>}{caps.split && <button className="btn gold" onClick={() => act("split")}>Split</button>}</>}
             {phase === "dealer" && <span className="wait">Dealer plays…</span>}
           </div>
         </div>
       </div>
-      <HouseFair seat={seat} game="blackjack" bets={hands} fmt={o => (o as number[]).map(code).join(" ")}
-        check={(shoe, dealt) => (dealt as number[]).every((c, i) => (shoe as number[])[i] === c)}
-        formula="Each hand gets a fresh 6-deck shoe: Fisher-Yates over 312 cards driven by HMAC-SHA256(server seed, “client seed:nonce:cursor”). Cards come off the top in order."
+      <HouseFair seat={seat} game="blackjack" bets={hands} fmt={o => { const r = o as BjRecord; return `${r.hands.map(h => h.map(code).join(" ")).join(" | ")} vs ${r.dealer.map(code).join(" ")}`; }}
+        check={(shoe, dealt) => verifyRecord(shoe as number[], dealt as BjRecord)}
+        formula="Each hand gets a fresh 6-deck shoe: Fisher-Yates over 312 cards driven by HMAC-SHA256(server seed, “client seed:nonce:cursor”). Cards come off the top in order. After the reveal your browser replays the server's draw log (including any split) against the shoe and checks it rebuilds your exact hands and the dealer's 17 rule."
         extra={<p className="note">The whole shoe is fixed by the committed seed before the first card, and the hole card stays on the server until you finish, so nobody can stack the deck mid-hand.</p>} />
     </div>
   );

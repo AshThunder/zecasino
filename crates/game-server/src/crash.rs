@@ -25,14 +25,16 @@ pub struct Crash {
 }
 
 impl Crash {
-    pub fn new() -> Self {
+    /// `first_round` comes from the ledger so round ids continue across restarts.
+    pub fn new(first_round: u64) -> Self {
         let (tx, _) = broadcast::channel(256);
-        let mut c = Self { round: 0, phase: Phase::Busted, seed: [0; 32], commitment: String::new(), bust: 100, started: Instant::now(), bets: HashMap::new(), tx };
+        let mut c = Self { round: first_round.saturating_sub(1), phase: Phase::Busted, seed: [0; 32], commitment: String::new(), bust: 100, started: Instant::now(), bets: HashMap::new(), tx };
         c.next_round();
         c
     }
-    fn next_round(&mut self) {
-        self.round += 1;
+    fn next_round(&mut self) { let r = self.round + 1; self.start_round(r); }
+    pub fn start_round(&mut self, round: u64) {
+        self.round = round;
         rand::rngs::OsRng.fill_bytes(&mut self.seed);
         self.commitment = commit_server_seed(&self.seed);
         self.bust = games::crash(&mut OutcomeStream::new(self.seed, CRASH_CLIENT_SEED, self.round));
@@ -72,7 +74,7 @@ pub async fn run(app: Arc<App>) {
             }
             let round = c.round; drop(c);
             for (tok, amt, anon, a) in payouts {
-                let bal = app.ledger.lock().await.apply(&tok, amt as i64, "payout", &format!("crash#{round}")).ok();
+                let bal = Some(app.ledger.lock().await.crash_cash(&tok, amt, round));
                 let _ = tx.send(json!({ "t": "crash_out", "anon": anon, "mult": a }).to_string());
                 app.notify(&tok, json!({ "t": "balance", "balance": bal })).await;
             }
@@ -81,9 +83,11 @@ pub async fn run(app: Arc<App>) {
         let mut c = app.crash.lock().await;
         c.phase = Phase::Busted;
         let _ = c.tx.send(json!({ "t": "crash_bust", "round": c.round, "bust": c.bust, "server_seed": hex::encode(c.seed), "commitment": c.commitment, "client_seed": CRASH_CLIENT_SEED }).to_string());
-        drop(c);
+        let round = c.round; drop(c);
+        app.ledger.lock().await.crash_close_round(round);
         tokio::time::sleep(Duration::from_millis(3_000)).await;
-        app.crash.lock().await.next_round();
+        let next = app.ledger.lock().await.next_crash_round();
+        app.crash.lock().await.start_round(next);
     }
 }
 

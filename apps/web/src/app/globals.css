@@ -473,3 +473,10 @@ button.shield-pill { cursor: pointer; font: inherit; }
 .sk-row input { flex: 1; background: #0B0B0C; border: 1px solid #ffffff22; border-radius: 8px; color: #EEE; padding: 8px 10px; font-size: 12px; }
 .sk-keep { font-size: 13px; color: #C9C1AE; display: flex; gap: 8px; align-items: center; }
 .sk-close { position: absolute; top: 10px; right: 12px; background: none; border: 0; color: #A89F8C; font-size: 20px; cursor: pointer; }
+
+/* split hands */
+.hand.player { gap: 0; padding-left: 0; }
+.hand.player .phand { display: flex; align-items: center; position: relative; padding: 6px 10px 6px 50px; border-radius: 14px; transition: box-shadow .25s, transform .25s; }
+.hand.player.split { gap: 38px; }
+.hand.player.split .phand { opacity: .78; }
+.hand.player.split .phand.active { opacity: 1; box-shadow: 0 0 0 2px #E9C46A, 0 0 24px #E9C46A55; transform: translateY(-4px); }

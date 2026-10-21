@@ -41,43 +41,96 @@ pub fn bj_value(cards: &[u8]) -> (u32, bool) {
     (t, aces > 0)
 }
 
+/// One player hand. A split makes two.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Hand { pub nonce: u64, pub shoe: Vec<u8>, pub pos: usize, pub player: Vec<u8>, pub dealer: Vec<u8>, pub stake: u64, pub done: bool }
+pub struct PHand { pub cards: Vec<u8>, pub stake: u64, pub done: bool }
+
+/// A blackjack round. `draws` records where every card off the shoe went (hand index, or -1 for the
+/// dealer), in order, so the browser can check after the seed reveal that each card is the next
+/// card of the committed shoe and that the dealer followed the stand-on-17 rule.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Hand { pub nonce: u64, pub shoe: Vec<u8>, pub pos: usize, pub hands: Vec<PHand>, pub active: usize, pub dealer: Vec<u8>, pub done: bool, pub draws: Vec<(i8, u8)> }
 
 #[derive(Serialize, Debug)]
-pub struct HandView { pub nonce: u64, pub player: Vec<u8>, pub dealer: Vec<u8>, pub hole_hidden: bool, pub done: bool, pub payout: u64, pub stake: u64, pub message: Option<String> }
+pub struct HandView {
+    pub nonce: u64, pub player: Vec<u8>, pub dealer: Vec<u8>, pub hole_hidden: bool, pub done: bool, pub payout: u64, pub stake: u64, pub message: Option<String>,
+    pub hands: Vec<PHand>, pub active: usize, pub can_split: bool, pub can_double: bool, pub draws: Option<Vec<(i8, u8)>>,
+}
+
+/// `draws` marker for a split (not a card off the shoe).
+pub const SPLIT: i8 = -2;
+
+pub fn card_value(c: u8) -> u8 { let r = c % 13; if r == 0 { 11 } else { (r + 1).min(10) } }
 
 impl Hand {
     /// A fresh 6-deck shoe per hand, fully determined by (seed, client seed, nonce): verifiable after reveal.
     pub fn deal(mut s: OutcomeStream, nonce: u64, stake: u64) -> Self {
         let shoe = games::shoe(&mut s, 6);
-        let mut h = Self { nonce, shoe, pos: 0, player: vec![], dealer: vec![], stake, done: false };
-        let (a, b, c, d) = (h.draw(), h.draw(), h.draw(), h.draw());
-        h.player = vec![a, c]; h.dealer = vec![b, d];
+        let mut h = Self { nonce, shoe, pos: 0, hands: vec![PHand { cards: vec![], stake, done: false }], active: 0, dealer: vec![], done: false, draws: vec![] };
+        h.draw_to(0); h.draw_to(-1); h.draw_to(0); h.draw_to(-1);
         h
     }
-    fn draw(&mut self) -> u8 { let c = self.shoe[self.pos]; self.pos += 1; c }
-    pub fn natural(&self) -> bool { self.player.len() == 2 && bj_value(&self.player).0 == 21 }
-    pub fn hit(&mut self) { if !self.done { let c = self.draw(); self.player.push(c); } }
-    pub fn double(&mut self) -> bool { if self.done || self.player.len() != 2 { return false; } self.stake *= 2; self.hit(); true }
-    pub fn dealer_play(&mut self) { while bj_value(&self.dealer).0 < 17 { let c = self.draw(); self.dealer.push(c); } }
-    /// Settles: returns (gross payout, message). Dealer stands on all 17s; blackjack pays 3:2.
+    fn draw_to(&mut self, t: i8) { let c = self.shoe[self.pos]; self.pos += 1; self.draws.push((t, c)); if t < 0 { self.dealer.push(c) } else { self.hands[t as usize].cards.push(c) } }
+    pub fn stake(&self) -> u64 { self.hands.iter().map(|h| h.stake).sum() }
+    pub fn player(&self) -> &[u8] { &self.hands[self.active.min(self.hands.len() - 1)].cards }
+    pub fn natural(&self) -> bool { self.hands.len() == 1 && self.hands[0].cards.len() == 2 && bj_value(&self.hands[0].cards).0 == 21 }
+    pub fn can_split(&self) -> bool { !self.done && self.hands.len() == 1 && self.hands[0].cards.len() == 2 && card_value(self.hands[0].cards[0]) == card_value(self.hands[0].cards[1]) }
+    pub fn can_double(&self) -> bool { !self.done && self.player().len() == 2 }
+    /// Moves to the next unfinished hand; returns true when every player hand is finished.
+    fn advance(&mut self) -> bool {
+        while self.active < self.hands.len() && self.hands[self.active].done { self.active += 1; }
+        self.active >= self.hands.len()
+    }
+    fn close_active(&mut self) -> bool { let a = self.active; self.hands[a].done = true; self.advance() }
+    /// Returns true when the player is finished with every hand (time to settle).
+    pub fn hit(&mut self) -> bool {
+        if self.done { return true; }
+        let a = self.active; self.draw_to(a as i8);
+        if bj_value(&self.hands[a].cards).0 >= 21 { self.close_active() } else { false }
+    }
+    pub fn stand(&mut self) -> bool { if self.done { return true; } self.close_active() }
+    pub fn double(&mut self) -> Option<bool> {
+        if !self.can_double() { return None; }
+        let a = self.active; self.hands[a].stake *= 2; self.draw_to(a as i8); Some(self.close_active())
+    }
+    /// Splits a pair into two hands of the same stake; each gets one new card. Split aces get one card only.
+    pub fn split(&mut self) -> Option<bool> {
+        if !self.can_split() { return None; }
+        let c = self.hands[0].cards.pop().unwrap(); let stake = self.hands[0].stake;
+        self.hands.push(PHand { cards: vec![c], stake, done: false });
+        self.draws.push((SPLIT, 0)); // marker: hand 0's second card moves to hand 1 here
+        self.draw_to(0); self.draw_to(1);
+        if self.hands[0].cards[0] % 13 == 0 { self.hands[0].done = true; self.hands[1].done = true; }
+        for i in 0..2 { if bj_value(&self.hands[i].cards).0 == 21 { self.hands[i].done = true; } }
+        self.active = 0; Some(self.advance())
+    }
+    pub fn dealer_play(&mut self) { while bj_value(&self.dealer).0 < 17 { self.draw_to(-1); } }
+    /// Settles every hand: returns (gross payout, message). Dealer stands on all 17s; blackjack pays 3:2
+    /// (a 21 on a split hand is not blackjack). The dealer only draws if some hand is still live.
     pub fn settle(&mut self) -> (u64, &'static str) {
         self.done = true;
-        let (pv, _) = bj_value(&self.player);
-        if pv > 21 { return (0, "Bust."); }
         let dealer_bj = self.dealer.len() == 2 && bj_value(&self.dealer).0 == 21;
-        if self.natural() && !dealer_bj { return (self.stake * 5 / 2, "Blackjack! Pays 3 to 2."); }
-        self.dealer_play();
+        if self.natural() && !dealer_bj { return (self.hands[0].stake * 5 / 2, "Blackjack! Pays 3 to 2."); }
+        if self.hands.iter().any(|h| bj_value(&h.cards).0 <= 21) && !dealer_bj { self.dealer_play(); }
         let dv = bj_value(&self.dealer).0;
-        if dealer_bj && !self.natural() { (0, "Dealer has blackjack.") }
-        else if dv > 21 { (self.stake * 2, "Dealer busts. You win.") }
-        else if pv > dv { (self.stake * 2, "You win.") }
-        else if pv == dv { (self.stake, "Push.") }
-        else { (0, "Dealer wins.") }
+        let mut pay = 0; let mut wins = 0; let mut pushes = 0;
+        for h in &self.hands {
+            let pv = bj_value(&h.cards).0;
+            let p = if pv > 21 { 0 } else if dealer_bj && !self.natural() { 0 } else if dv > 21 || pv > dv { h.stake * 2 } else if pv == dv { h.stake } else { 0 };
+            if p > h.stake { wins += 1 } else if p == h.stake { pushes += 1 }
+            pay += p;
+        }
+        let msg = if self.hands.len() > 1 {
+            match (wins, pushes) { (2, _) => "Both hands win.", (1, 1) => "One hand wins, one pushes.", (1, 0) => "One hand wins, one loses.", (0, 2) => "Both hands push.", (0, 1) => "One hand pushes, one loses.", _ => "Both hands lose." }
+        } else {
+            let pv = bj_value(&self.hands[0].cards).0;
+            if pv > 21 { "Bust." } else if dealer_bj { "Dealer has blackjack." } else if dv > 21 { "Dealer busts. You win." } else if pv > dv { "You win." } else if pv == dv { "Push." } else { "Dealer wins." }
+        };
+        (pay, msg)
     }
     pub fn view(&self, payout: u64, message: Option<String>) -> HandView {
-        HandView { nonce: self.nonce, player: self.player.clone(), dealer: if self.done { self.dealer.clone() } else { vec![self.dealer[0]] }, hole_hidden: !self.done, done: self.done, payout, stake: self.stake, message }
+        HandView { nonce: self.nonce, player: self.player().to_vec(), dealer: if self.done { self.dealer.clone() } else { vec![self.dealer[0]] }, hole_hidden: !self.done, done: self.done, payout, stake: self.stake(), message,
+            hands: self.hands.clone(), active: self.active.min(self.hands.len() - 1), can_split: self.can_split(), can_double: self.can_double(), draws: self.done.then(|| self.draws.clone()) }
     }
 }
 
@@ -107,7 +160,35 @@ mod tests {
     #[test] fn bj_hand_is_reproducible() {
         let a = Hand::deal(OutcomeStream::new([3; 32], "c", 9), 9, 100);
         let b = Hand::deal(OutcomeStream::new([3; 32], "c", 9), 9, 100);
-        assert_eq!(a.player, b.player); assert_eq!(a.dealer, b.dealer);
+        assert_eq!(a.hands[0].cards, b.hands[0].cards); assert_eq!(a.dealer, b.dealer);
         let mut h = a; let (p, _) = h.settle(); assert!(p <= 250); assert!(h.done);
+    }
+
+    fn find_pair() -> Hand {
+        for n in 0..5000 { let h = Hand::deal(OutcomeStream::new([7; 32], "c", n), n, 100); if h.can_split() && h.hands[0].cards[0] % 13 != 0 && !h.natural() { return h; } }
+        panic!("no pair");
+    }
+    #[test] fn split_plays_two_hands_and_records_draws() {
+        let mut h = find_pair();
+        let shoe = h.shoe.clone();
+        let mut fin = h.split().unwrap();
+        assert_eq!(h.hands.len(), 2); assert_eq!(h.stake(), 200);
+        while !fin { fin = h.stand(); }
+        let (pay, _) = h.settle();
+        assert!(pay <= 400);
+        // replaying `draws` against the shoe rebuilds exactly the hands the player saw
+        let (mut hands, mut dealer, mut i) = (vec![vec![]], vec![], 0usize);
+        for &(t, _) in &h.draws {
+            if t == SPLIT { let c = hands[0].pop().unwrap(); hands.push(vec![c]); continue; }
+            let c = shoe[i]; i += 1;
+            if t < 0 { dealer.push(c) } else { hands[t as usize].push(c) }
+        }
+        assert_eq!(hands, h.hands.iter().map(|x| x.cards.clone()).collect::<Vec<_>>());
+        assert_eq!(dealer, h.dealer);
+        assert!(h.split().is_none(), "no re-split");
+    }
+    #[test] fn double_lands_one_card_and_doubles_stake() {
+        let mut h = Hand::deal(OutcomeStream::new([1; 32], "c", 3), 3, 100);
+        assert!(h.double().unwrap()); assert_eq!(h.hands[0].cards.len(), 3); assert_eq!(h.stake(), 200);
     }
 }

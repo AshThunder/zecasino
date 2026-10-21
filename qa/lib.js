@@ -42,6 +42,16 @@ async function probe(s, msg) {
     setTimeout(() => res({ t: "timeout" }), 8000);
   }), [s.token, msg]);
 }
+/** Several messages in order on one raw socket; returns every reply (by id). */
+async function probeSeq(s, msgs) {
+  return s.p.evaluate(async ([tok, msgs]) => new Promise(res => {
+    const ws = new WebSocket("ws://127.0.0.1:3200/ws"); const out = []; let i = 0;
+    const next = () => { if (i >= msgs.length) { ws.close(); res(out); } else ws.send(JSON.stringify({ ...msgs[i], id: 2 + i++ })); };
+    ws.onopen = () => ws.send(JSON.stringify({ t: "hello", token: tok, id: 1 }));
+    ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id === 1) next(); else if (m.id >= 2) { out.push(m); next(); } };
+    setTimeout(() => res(out), 15000);
+  }), [s.token, msgs]);
+}
 async function verifyHouse(p) {
   await p.getByRole("button", { name: /Reveal seed/ }).click();
   await p.waitForTimeout(2500);
@@ -49,4 +59,4 @@ async function verifyHouse(p) {
   return { ok, bad };
 }
 function record(game, check, pass, note = "") { results.push({ game, check, pass, note }); console.log(`${pass ? "PASS" : "FAIL"} [${game}] ${check} ${note}`); }
-module.exports = { launch, session, header, ledger, reconcile, probe, verifyHouse, record, results, BASE };
+module.exports = { probeSeq, launch, session, header, ledger, reconcile, probe, verifyHouse, record, results, BASE };

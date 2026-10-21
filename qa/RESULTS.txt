@@ -1,9 +1,33 @@
+QA run 2026-10-21 07:58 WAT — split, persistence, double, dice-insufficient pass
+cargo test --workspace: 46 passed, 0 failed; verify-vectors ok
+PASS [Session] fresh session reconciles 
+PASS [Dice] 3 rolls verified 3 ✓ 0 ✗
+PASS [Dice] ledger reconcile 
+PASS [Dice] bet > balance rejected insufficient balance
+PASS [Dice] insufficient balance rejected (stake within limit) insufficient balance; balance 41200000→41200000, entries 1→1
+PASS [Roulette] 3 spins verified 3 ✓ 0 ✗
+PASS [Roulette] ledger reconcile 
+PASS [Roulette] bet > balance rejected insufficient balance
+PASS [Blackjack] 4 hands (incl. double) verified 4 ✓ 0 ✗
+PASS [Blackjack] ledger reconcile 
+PASS [Blackjack] bet > balance rejected stake out of range
+PASS [Blackjack] double lands one card, doubles the stake and the debit cards 3, stake 400000, Δledger -400000 = payout 0 − 400000
+PASS [Blackjack] split shows two hands 
+PASS [Blackjack] split debits a second stake 
+PASS [Blackjack] split round verified (draw log rebuilds both hands) 1 ✓ 0 ✗
+PASS [Blackjack] ledger reconcile after split 
+PASS [Blackjack] refresh mid-hand resumes the hand 
+PASS [Blackjack] ledger reconcile after refresh 
+PASS [Blackjack] disconnect mid-hand resumes the hand 
+PASS [Blackjack] ledger reconcile after disconnect 
+PASS [Session] closed tab restored from session key 
+PASS [Session] ledger reconcile after restore 
 PASS [Crash] manual cash-out round cashed
 PASS [Crash] auto cash-out at 1.01× settled payout entry written after the bet (or the round busted under 1.01×, 1% odds)
 PASS [Crash] refresh mid-round keeps cash-out button 
 PASS [Crash] every finished round verified in browser 1 ✓ 0 ✗
 PASS [Crash] ledger reconcile 
-PASS [Crash] bet > balance rejected insufficient balance
+PASS [Crash] bet > balance rejected stake out of range
 PASS [Carrot] round plays to reveal (two sessions) 
 PASS [Carrot] normal: seal verified by both browsers 
 PASS [Carrot] normal: ledger reconcile A 
@@ -40,19 +64,4 @@ PASS [Hold'em] refresh mid-hand resumes the table
 PASS [Hold'em] refreshed player finishes the hand (own hole cards reopened) 
 PASS [Hold'em] ledger reconcile A after refresh hand 
 PASS [Hold'em] ledger reconcile B after refresh hand 
-PASS [Session] fresh session reconciles 
-PASS [Dice] 3 rolls verified 3 ✓ 0 ✗
-PASS [Dice] ledger reconcile 
-PASS [Dice] bet > balance rejected insufficient balance
-PASS [Roulette] 3 spins verified 3 ✓ 0 ✗
-PASS [Roulette] ledger reconcile 
-PASS [Roulette] bet > balance rejected insufficient balance
-PASS [Blackjack] 4 hands (incl. double) verified 4 ✓ 0 ✗
-PASS [Blackjack] ledger reconcile 
-PASS [Blackjack] bet > balance rejected insufficient balance
-PASS [Blackjack] refresh mid-hand resumes the hand 
-PASS [Blackjack] ledger reconcile after refresh 
-PASS [Blackjack] disconnect mid-hand resumes the hand 
-PASS [Blackjack] ledger reconcile after disconnect 
-PASS [Session] closed tab restored from session key 
-PASS [Session] ledger reconcile after restore 
+PASS [Restart] open blackjack hand resumes / settles; open crash bet refunded (round 76, +0.003); round ids 76→77; ledger == Σ entries
