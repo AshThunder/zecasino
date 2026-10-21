@@ -81,7 +81,7 @@ export function getClient(clientSeed = "zecasino"): Promise<Client | null> {
       const s = await c.rpc({ t: "hello", token: storedToken(), client_seed: clientSeed });
       sessionStorage.setItem(SESSION_KEY, s.token); if (localStorage.getItem(KEEP_KEY)) localStorage.setItem(KEEP_KEY, s.token); c.session = s;
       if (DEMO !== !!s.demo) { ws.close(); connecting = null; return resolve(null); } // demo chips only on the demo server, real balance only on the real one
-      if (!DEMO && DEV_CREDIT && s.balance === 0) await c.rpc({ t: "dev_credit", amount: toZat(0.412) });
+      if (!DEMO && DEV_CREDIT && s.dev_credit && s.balance === 0) await c.rpc({ t: "dev_credit", amount: toZat(0.412) });
       client = c; status = "online"; connecting = null; emit(); resolve(c);
     };
   }));

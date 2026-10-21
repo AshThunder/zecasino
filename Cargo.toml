@@ -20,3 +20,10 @@ zcash_proofs = { git = "https://github.com/zcash/librustzcash.git", rev = "eb38d
 zcash_protocol = { git = "https://github.com/zcash/librustzcash.git", rev = "eb38d7a373661179dbc083a2fd58b3a6c9b25818" }
 zcash_transparent = { git = "https://github.com/zcash/librustzcash.git", rev = "eb38d7a373661179dbc083a2fd58b3a6c9b25818" }
 zip321 = { git = "https://github.com/zcash/librustzcash.git", rev = "eb38d7a373661179dbc083a2fd58b3a6c9b25818" }
+
+# The mental-poker shuffle (cut-and-choose over Ristretto) is ~50x slower unoptimised, which pushed debug test
+# runs past the 20 s protocol timeout. Optimise the crypto in dev/test builds too.
+[profile.dev.package."*"]
+opt-level = 3
+[profile.dev.package.zecasino-mental-poker]
+opt-level = 3

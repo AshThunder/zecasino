@@ -24,14 +24,15 @@ async function sitBoth(A, B, path, btn = /Sit down/) {
       if (canPeek) {
         await holder.p.getByRole("button", { name: "Peek inside" }).click(); await holder.p.waitForTimeout(1500);
         const line = holder.p.locator(".carrot-lines button, .lines button, button.line").first();
-        if (await line.count()) await line.click(); else await holder.p.getByRole("button", { name: /empty|carrot|Mine/i }).first().click();
+        if (await line.count()) await line.click(); else await holder.p.getByRole("button", { name: /got the carrot|empty|Mine/i }).first().click();
       }
       if (mode === "disconnect") { await guesser.p.evaluate(() => window.__zc.drop()); await guesser.p.waitForTimeout(3000); }
       const swap = await until(() => vis(guesser.p, "Swap boxes"), 20000);
       if (swap) await guesser.p.getByRole("button", { name: "Swap boxes" }).click();
       const done = await until(async () => (await vis(A.p, "Next round")) && (await vis(B.p, "Next round")), 25000);
       if (mode === "disconnect") record("Carrot", "guesser disconnect mid-round, reconnects and finishes", !!done);
-      if (mode === "normal") record("Carrot", "round plays to reveal (two sessions)", !!done);
+      if (mode === "normal") record("Carrot", "round plays to reveal (two sessions)", !!done, done ? "" : `swap=${!!swap}`);
+      if (!done) { await A.p.screenshot({ path: "/tmp/carrotA.png" }); await B.p.screenshot({ path: "/tmp/carrotB.png" }); }
       if (done) {
         const fair = (await A.p.locator("aside.fair").innerText()) + (await B.p.locator("aside.fair").innerText());
         record("Carrot", `${mode}: seal verified by both browsers`, /verified|✓/i.test(fair) && !/mismatch|✗/i.test(fair));

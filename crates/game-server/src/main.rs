@@ -5,6 +5,9 @@ async fn main() {
     let db = std::env::var("ZECASINO_DB").unwrap_or_else(|_| "zecasino.sqlite".into());
     let dev = std::env::var("ZECASINO_DEV_CREDIT").is_ok_and(|v| v == "1");
     let demo = std::env::var("ZECASINO_DEMO").is_ok_and(|v| v == "1");
+    // Dev credits mint unbacked chips: only allowed on a QA instance that cannot reach the wallet service,
+    // so the real ledger's liabilities only ever come from on-chain deposits.
+    if dev { assert!(std::env::var("ZEC_SERVICE_URL").is_err() && std::env::var("ZEC_INTERNAL_KEY").is_err(), "ZECASINO_DEV_CREDIT is QA-only: run it without wallet credentials, on its own database"); }
     let app = if demo {
         // A demo instance must never share the real ledger or reach the wallet service.
         assert!(std::env::var("ZEC_SERVICE_URL").is_err() && std::env::var("ZEC_INTERNAL_KEY").is_err(), "demo instance must run without wallet credentials");

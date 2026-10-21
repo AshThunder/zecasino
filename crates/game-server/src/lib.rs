@@ -212,7 +212,7 @@ async fn conn(socket: WebSocket, app: Arc<App>) {
             drop(seats);
             app.conns.lock().await.entry(tok.clone()).or_default().push(tx.clone());
             let bal = app.ledger.lock().await.balance(&tok).unwrap();
-            let _ = tx.send(json!({ "t": "session", "id": id, "token": tok, "balance": bal, "demo": app.demo, "seat": app.seat_view(&tok).await }).to_string());
+            let _ = tx.send(json!({ "t": "session", "id": id, "token": tok, "balance": bal, "demo": app.demo, "dev_credit": app.dev_credit, "seat": app.seat_view(&tok).await }).to_string());
             token = Some(tok);
             continue;
         }

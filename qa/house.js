@@ -1,7 +1,7 @@
 const q = require("./lib");
 const execSplit = tok => { const id = require("crypto").createHash("sha256").update(tok).digest("hex");
   // the latest bj round has two bet entries = split debited
-  return require("child_process").execFileSync("python3", ["-c", `import sqlite3,sys;c=sqlite3.connect('file:${process.env.ZC_DB || "/tmp/zc-dev.sqlite"}?mode=ro',uri=True)
+  return require("child_process").execFileSync("python3", ["-c", `import sqlite3,sys;c=sqlite3.connect('file:${process.env.ZC_DB || require("path").join(__dirname, "../run/qa.sqlite")}?mode=ro',uri=True)
 r=c.execute("select ref from entries where session=? and kind='bet' and ref like 'bj%' order by seq desc limit 1",(sys.argv[1],)).fetchone()[0]
 print(c.execute("select count(*) from entries where session=? and kind='bet' and ref=?",(sys.argv[1],r)).fetchone()[0]-1)`, id]).toString().trim() !== "0"; };
 (async () => {

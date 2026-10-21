@@ -9,7 +9,7 @@ const q = require("./lib"); const { execSync } = require("child_process");
   let bet = null, r0 = null;
   for (let t = 0; t < 120 && !bet; t++) { const [m] = await q.probeSeq(s, [{ t: "crash_bet", stake: 300000 }]); if (m.t === "crash_bet") { bet = m; r0 = m.round; } else await new Promise(r => setTimeout(r, 500)); }
   const before = q.ledger(s.token);
-  execSync("bash /tmp/restart-gs.sh", { stdio: "ignore" }); await new Promise(r => setTimeout(r, 1500));
+  execSync("bash " + __dirname + "/qa-server.sh", { stdio: "ignore" }); await new Promise(r => setTimeout(r, 1500));
   const after = q.ledger(s.token);
   const [g] = await q.probeSeq(s, [{ t: "bj_get" }]);
   const same = !!hand && g.hand && JSON.stringify(g.hand.player) === JSON.stringify(hand.player) && g.hand.dealer[0] === hand.dealer[0] && g.hand.nonce === hand.nonce && !g.hand.done;
