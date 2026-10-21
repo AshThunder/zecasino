@@ -32,7 +32,10 @@ function Item({ t }: { t: Toast }) {
     <div ref={el} className={`toast t-${t.kind}`} role={t.kind === "error" ? "alert" : "status"}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       <span className="t-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24">{ICON[t.kind]}</svg></span>
-      <div className="t-text"><b>{t.title}</b>{t.body && <p>{t.body}</p>}</div>
+      <div className="t-text"><b>{t.title}</b>{t.body && <p>{t.body}</p>}
+        {t.actions?.length ? <div className="t-actions" onPointerDown={e => e.stopPropagation()}>{t.actions.map(a => a.href
+          ? <a key={a.label} className="btn ghost sm" href={a.href} target="_blank" rel="noopener noreferrer">{a.label} ↗</a>
+          : <button key={a.label} className="btn gold sm" onClick={() => { if (a.event) window.dispatchEvent(new Event(a.event)); close(); }}>{a.label}</button>)}</div> : null}</div>
       <button className="t-close" aria-label="Dismiss notification" onPointerDown={e => e.stopPropagation()} onClick={close}>×</button>
       <i ref={bar} className="t-bar" aria-hidden="true" />
     </div>

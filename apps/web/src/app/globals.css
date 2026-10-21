@@ -953,8 +953,7 @@ dialog.restore > h3, dialog.howto > .eyebrow { padding-right: 44px; }
 /* ---------- PvP smoothness: quick match, house player, invites, turn clock, presence, rematch ---------- */
 .match-bar { display: grid; gap: 10px; width: 100%; max-width: 640px; }
 .mb-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
-.mb-quick { display: grid; justify-items: start; line-height: 1.15; text-align: left; flex: 1 1 220px; }
-.mb-quick small { font-size: .68rem; font-weight: 500; opacity: .8; letter-spacing: .02em; }
+.mb-join-btn { flex: 1 1 220px; }
 .mb-join { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mb-join input { width: 9.5ch; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); color: var(--ivory); font-size: 1rem; letter-spacing: .18em; text-transform: uppercase; }
 .mb-join input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -1040,3 +1039,23 @@ dialog.restore > h3, dialog.howto > .eyebrow { padding-right: 44px; }
 }
 .roulette-felt .layout-wrap { min-width: 0; max-width: 100%; } .roulette-felt .layout-wrap > .table-controls { width: 100%; max-width: 100%; }
 @media (max-width: 1100px) { .roulette-felt { grid-template-columns: minmax(0, 1fr); } .roulette-felt > * { min-width: 0; max-width: 100%; } }
+.layout .lt { text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased; pointer-events: none; }
+
+/* Toast actions + testnet faucet links */
+.t-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.t-actions .btn { min-height: 32px; }
+.faucet-pill { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px dashed #6FD39B88; color: #8FE6B4; font-size: .74rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.faucet-pill:hover, .faucet-pill:focus-visible { border-style: solid; color: #CFF5DE; outline: none; }
+.faucet-link { display: grid; gap: 2px; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px dashed #6FD39B66; background: #6FD39B0d; color: #CFF5DE; font-size: .82rem; text-decoration: none; overflow-wrap: anywhere; }
+.faucet-link b { color: #8FE6B4; } .faucet-link small { color: var(--muted); font-size: .7rem; }
+.faucet-link:hover, .faucet-link:focus-visible { border-style: solid; outline: none; }
+.fp-short { display: none; }
+@media (max-width: 1360px) { .fp-long { display: none; } .fp-short { display: inline; } }
+@media (max-width: 640px) { .hdr-right .faucet-pill { display: none; } }
+/* Roulette: give the betting layout the room, shrink the wheel instead */
+@media (min-width: 1101px) {
+  .roulette-felt { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 22px; }
+  .roulette-felt .wheel-well, .roulette-felt .wheel-well svg { width: 100%; max-width: 300px; height: auto; }
+}
+@media (min-width: 1600px) { .roulette-felt { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); } .roulette-felt .wheel-well, .roulette-felt .wheel-well svg { max-width: 380px; } }
+.roulette-felt .rack button svg { width: clamp(40px, 3.4vw, 54px); height: clamp(40px, 3.4vw, 54px); }

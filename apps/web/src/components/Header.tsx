@@ -1,5 +1,6 @@
 "use client";
 import { CloseX } from "./CloseX";
+import { FAUCET_URL, OPEN_CASHIER } from "@/lib/errors";
 import { Toaster } from "./Toaster";
 import { RecoveryCard, RestoreDialog } from "./Recovery";
 import { toast } from "@/lib/toast";
@@ -10,7 +11,7 @@ import { createPortal } from "react-dom";
 import { ZMark } from "./ZMark";
 import { CashierDialog } from "./CashierDialog";
 import { useSyncExternalStore } from "react";
-import { getClient, serverState, SESSION_KEY, KEEP_KEY } from "@/lib/server";
+import { getClient, serverState, SESSION_KEY, KEEP_KEY , DEMO } from "@/lib/server";
 import { isMuted, setMuted } from "@/lib/sfx";
 
 import { GAMES } from "@/lib/games";
@@ -63,6 +64,7 @@ function MobileMenu({ path, onKey }: { path: string; onKey: () => void }) {
       <small>Player vs player</small>{PVP.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>House games</small>{HOUSE.map(g => <Link key={g.id} href={g.href} className={path === g.href ? "on" : ""}>{g.name}<span>{g.kind}</span></Link>)}
       <small>Your session</small><button className="ms-key" onClick={() => { setOpen(false); onKey(); }}>Session key &amp; recovery code<span>Save it, or restore another session</span></button>
+      {!DEMO && <a className="ms-key ms-faucet" href={FAUCET_URL} target="_blank" rel="noopener noreferrer">Get free testnet TAZ ↗<span>Public Zcash testnet faucet · testnet coins have no value</span></a>}
       <button className="ms-key restore-entry" onClick={() => { setOpen(false); setRestore(true); }}>Restore session<span>Paste a recovery code or open a backup file</span></button>
       <small>Mode</small><div className="ms-wrap"><ModeSwitch /></div>
       <small>Trust</small><Link href="/#fair">Provably fair</Link><Link href="/solvency" className={path === "/solvency" ? "on" : ""}>Solvency</Link><Link href="/history" className={path === "/history" ? "on" : ""}>Session history</Link>
@@ -78,6 +80,12 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [muted, setM] = useState(isMuted());
   const [keyOpen, setKeyOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [demo, setDemo] = useState(true); useEffect(() => setDemo(DEMO), []);
+  useEffect(() => { const c = () => setOpen(true), r = () => setRestoreOpen(true);
+    addEventListener(OPEN_CASHIER, c); addEventListener("zc:open-restore", r);
+    return () => { removeEventListener(OPEN_CASHIER, c); removeEventListener("zc:open-restore", r); }; }, []);
+  const broke = !demo && live.balance === 0;
   return (<>
     <header className="hdr">
       <Link href="/" className="brand" aria-label="Zecasino lobby">
@@ -97,6 +105,7 @@ export function Header() {
         </button>
         {keyOpen && <SessionKey onClose={() => setKeyOpen(false)} />}
         <span className="balance"><small>Balance</small><b>{live.balance == null ? <span className="skel" /> : `ⓩ ${live.balance.toFixed(4)}`}</b><small>TAZ</small></span>
+        {broke && <a className="faucet-pill" href={FAUCET_URL} target="_blank" rel="noopener noreferrer" title="Free TAZ from the public Zcash testnet faucet (testnet only, no real value)"><span className="fp-long">Get free testnet TAZ ↗</span><span className="fp-short">Free testnet TAZ ↗</span></a>}
         <button className="icon-btn" aria-label={muted ? "Unmute" : "Mute"} onClick={() => { setMuted(!muted); setM(!muted); }}>
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />{muted ? <path d="m16 9 5 6m0-6-5 6" stroke="currentColor" strokeWidth="2" /> : <path d="M16 8a5 5 0 0 1 0 8M18.5 5.5a8.5 8.5 0 0 1 0 13" stroke="currentColor" strokeWidth="2" fill="none" />}</svg>
         </button>
@@ -104,6 +113,7 @@ export function Header() {
         <MobileMenu path={path} onKey={() => setKeyOpen(true)} />
       </div>
       <CashierDialog open={open} onClose={() => setOpen(false)} />
+      {restoreOpen && <RestoreDialog onClose={() => setRestoreOpen(false)} />}
       <DepositShield />
       <Toaster />
     </header>

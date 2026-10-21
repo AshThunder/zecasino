@@ -52,7 +52,7 @@ async fn lobby(url: &str) -> Value {
 }
 
 #[tokio::test]
-async fn quick_match_counts_per_stake_and_invites_stay_private() {
+async fn public_queue_and_invites_stay_private() {
     let url = server().await;
     let (mut a, _) = client(&url, 1_000_000).await;
     let (mut b, _) = client(&url, 1_000_000).await;
@@ -61,8 +61,7 @@ async fn quick_match_counts_per_stake_and_invites_stay_private() {
     send(&mut b, json!({ "t": "carrot_join", "stake": 50_000, "invite": true })).await;
     let q = until(&mut b, "queued").await; let code = q["code"].as_str().unwrap().to_owned(); assert_eq!(code.len(), 6);
     let l = lobby(&url).await;
-    assert_eq!(l["tables"]["carrot"]["by_stake"]["80000"], 1);
-    assert!(l["tables"]["carrot"]["by_stake"].get("50000").is_none(), "invite tables are not listed");
+    assert_eq!(l["tables"]["carrot"]["waiting"], 1, "invite tables are not counted");
     // A public join at 0.0005 must not take the private table.
     send(&mut c, json!({ "t": "carrot_join", "stake": 50_000 })).await; until(&mut c, "queued").await;
     send(&mut c, json!({ "t": "queue_leave" })).await; until(&mut c, "queue_left").await;

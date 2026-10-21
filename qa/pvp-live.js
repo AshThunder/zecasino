@@ -9,9 +9,11 @@ const rec = (c, ok, n = "") => console.log(`${ok ? "PASS" : "FAIL"} [Live] ${c} 
     await p.goto(B + "/", { waitUntil: "networkidle" }); await p.waitForFunction(() => sessionStorage.getItem("zc.demo.session")); return p; };
   const A = await mk(1440, 900, false), C = await mk(390, 844, true);
   // Quick match between two browsers
-  await A.locator('.qm-stake[data-game="carrot"][data-stake="0.05"]').click();
-  rec("lobby counts waiting at 0.05", !!await until(async () => { await C.goto(B + "/", { waitUntil: "networkidle" }); return /1 waiting/.test(await C.locator('.qm-stake[data-game="carrot"][data-stake="0.05"]').innerText()); }, 20000));
-  await C.locator('.qm-stake[data-game="carrot"][data-stake="0.05"]').click();
+  rec("lobby has no Quick match strip", (await A.locator(".quick-match, .qm-stake").count()) === 0);
+  await A.goto(B + "/table/carrot", { waitUntil: "networkidle" }); await A.waitForTimeout(1000);
+  await A.locator(".stake-pick button", { hasText: "0.050" }).click(); await A.getByRole("button", { name: /^Sit down/ }).click();
+  await C.goto(B + "/table/carrot", { waitUntil: "networkidle" }); await C.waitForTimeout(1000);
+  await C.locator(".stake-pick button", { hasText: "0.050" }).click(); await C.getByRole("button", { name: /^Sit down/ }).click();
   const m = await until(async () => (await vis(A, "Peek inside")) ? [A, C] : (await vis(C, "Peek inside")) ? [C, A] : null, 20000);
   rec("quick match pairs the two browsers", !!m);
   if (m) { const [h, g] = m;
@@ -40,7 +42,7 @@ const rec = (c, ok, n = "") => console.log(`${ok ? "PASS" : "FAIL"} [Live] ${c} 
   await C.screenshot({ path: "../screenshots/after/pvp/live-invite-joined-mobile.png" });
   // House fallback
   await A.goto(B + "/table/carrot", { waitUntil: "networkidle" }); await A.waitForTimeout(1000);
-  await A.locator(".stake-pick button", { hasText: "0.010" }).click(); await A.getByRole("button", { name: /^Quick match/ }).click();
+  await A.locator(".stake-pick button", { hasText: "0.010" }).click(); await A.getByRole("button", { name: /^Sit down/ }).click();
   rec("house offer after ~20 s", !!await until(() => vis(A, "Play the house instead"), 32000));
   await A.getByRole("button", { name: "Play the house instead" }).click();
   rec("House player badge + explainer", !!await until(async () => (await A.locator(".felt .house-badge").count()) > 0 && (await A.locator(".house-note").count()) > 0, 15000));

@@ -5,10 +5,10 @@ import { play } from "./sfx";
 
 export type Game = "carrot" | "liars" | "holdem";
 const START: Record<Game, string> = { carrot: "carrot_start", liars: "liars_start", holdem: "hm_seated" };
-type Mode = { kind: "quick" } | { kind: "invite" } | { kind: "code"; code: string };
+type Mode = { kind: "public" } | { kind: "invite" } | { kind: "code"; code: string };
 
-/** Matchmaking for one PvP table: quick match at a stake, private invite tables, joining by code,
- *  and the clearly-labelled House player fallback. Reads ?stake=&quick=1 and ?invite=CODE links. */
+/** Matchmaking for one PvP table: join the queue at a stake, private invite tables, joining by code,
+ *  and the clearly-labelled House player fallback. Reads ?stake= and ?invite=CODE links. */
 export function useMatch(game: Game, stake: number, setStake: (taz: number) => void, onErr: (e: string | null) => void) {
   const [searching, setSearching] = useState(false);
   const [code, setCode] = useState<string | null>(null);
@@ -25,10 +25,10 @@ export function useMatch(game: Game, stake: number, setStake: (taz: number) => v
     catch (e) { const s = (e as Error).message; if (!/connection lost|offline/.test(s)) { setSearching(false); mode.current = null; setCode(null); } onErr(s); }
   }, [game, onErr, setStake]);
 
-  const quick = useCallback(() => join({ kind: "quick" }), [join]);
+  const sit = useCallback(() => join({ kind: "public" }), [join]);
   const invite = useCallback(() => join({ kind: "invite" }), [join]);
   const joinCode = useCallback((c: string) => join({ kind: "code", code: c.trim().toUpperCase() }), [join]);
-  const house = useCallback(() => join({ kind: "quick" }, { house: true }), [join]);
+  const house = useCallback(() => join({ kind: "public" }, { house: true }), [join]);
   const cancel = useCallback(async () => { mode.current = null; setSearching(false); setCode(null); const c = await getClient(); c?.rpc({ t: "queue_leave" }).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -43,14 +43,13 @@ export function useMatch(game: Game, stake: number, setStake: (taz: number) => v
       const q = new URLSearchParams(location.search);
       const inv = q.get("invite"); const st = Number(q.get("stake"));
       if (st > 0) { setStake(st); stakeRef.current = st; }
-      if (inv || q.get("quick")) history.replaceState(null, "", location.pathname);
-      if (inv) join({ kind: "code", code: inv.toUpperCase() }); else if (q.get("quick")) join({ kind: "quick" });
+      if (inv) { history.replaceState(null, "", location.pathname); join({ kind: "code", code: inv.toUpperCase() }); }
     });
     return () => offs.forEach(f => f());
   }, [game]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const link = code && typeof window !== "undefined" ? `${location.origin}/table/${game}?invite=${code}` : null;
-  return { searching, code, link, since, quick, invite, joinCode, house, cancel };
+  return { searching, code, link, since, join: sit, invite, joinCode, house, cancel };
 }
 export type Match = ReturnType<typeof useMatch>;
 

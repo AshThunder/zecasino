@@ -1,33 +1,19 @@
 "use client";
 import { useState } from "react";
 import { StakePicker } from "./StakePicker";
-import { useLobby } from "@/lib/lobby";
-import { ZAT } from "@/lib/server";
 import type { Game, Match } from "@/lib/pvp";
 import { useRematch } from "@/lib/pvp";
 import { toast } from "@/lib/toast";
+import { explain } from "@/lib/errors";
 
-/** Per-stake count of public players waiting at a table, keyed like StakePicker (TAZ as a string). */
-export function useWaitingByStake(game: Game, everyMs = 4000) {
-  const { data } = useLobby(everyMs);
-  const by = data?.tables[game]?.by_stake ?? {};
-  const out: Record<string, number> = {};
-  for (const [zat, n] of Object.entries(by)) out[String(Number(zat) / ZAT)] = n;
-  return out;
-}
-
-/** Stake chips with live queue counts, Quick match, Private table and Join-with-code. */
-export function MatchBar({ game, stakes, stake, setStake, m, fmt = (v: number) => v.toFixed(3), quickLabel = "Quick match" }: { game: Game; stakes: number[]; stake: number; setStake: (v: number) => void; m: Match; fmt?: (v: number) => string; quickLabel?: string }) {
-  const waiting = useWaitingByStake(game);
+/** Stake picker, Sit down (join the queue at that stake), Private table and Join-with-code. */
+export function MatchBar({ stakes, stake, setStake, m, fmt = (v: number) => v.toFixed(3), joinLabel = "Sit down" }: { game: Game; stakes: number[]; stake: number; setStake: (v: number) => void; m: Match; fmt?: (v: number) => string; joinLabel?: string }) {
   const [code, setCode] = useState(""); const [open, setOpen] = useState(false);
-  const here = waiting[String(stake)] ?? 0;
   return (
     <div className="match-bar">
-      <StakePicker options={stakes} value={stake} onChange={setStake} disabled={m.searching} waiting={waiting} />
+      <StakePicker options={stakes} value={stake} onChange={setStake} disabled={m.searching} />
       <div className="mb-row">
-        <button className="btn gold lg mb-quick" onClick={m.quick} disabled={m.searching}>
-          {quickLabel} · ⓩ {fmt(stake)}<small>{here ? `${here} waiting · instant match` : "join the queue"}</small>
-        </button>
+        <button className="btn gold lg mb-join-btn" onClick={m.join} disabled={m.searching}>{joinLabel} · ⓩ {fmt(stake)}</button>
         <button className="btn ghost mb-private" onClick={m.invite} disabled={m.searching} title="Get a link to send a friend">Private table</button>
         <button className="btn ghost mb-code" onClick={() => setOpen(o => !o)} disabled={m.searching} aria-expanded={open}>Have a code?</button>
       </div>
@@ -76,38 +62,9 @@ export function RematchButton({ room, house }: { room: string | null; house?: bo
   if (!room) return null;
   return <>
     {r.state === "offered" && <span className="rematch-offer">Opponent wants a rematch</span>}
-    <button className={`btn ${r.state === "offered" ? "gold" : "ghost"} rematch`} disabled={r.state === "asked"} onClick={() => r.ask().catch(e => toast({ kind: "error", title: "Rematch", body: (e as Error).message }))}>
+    <button className={`btn ${r.state === "offered" ? "gold" : "ghost"} rematch`} disabled={r.state === "asked"} onClick={() => r.ask().catch(e => toast({ kind: "error", ...explain((e as Error).message) }))}>
       {r.state === "asked" ? (house ? "Dealing…" : "Waiting for opponent…") : r.state === "offered" ? "Accept rematch" : "Rematch"}
     </button>
   </>;
 }
 
-const QM: { game: Game; name: string; stakes: number[]; fmt: (v: number) => string }[] = [
-  { game: "carrot", name: "Carrot in a Box", stakes: [0.01, 0.02, 0.05, 0.08, 0.1, 0.25], fmt: v => v.toFixed(v < 0.1 ? 3 : 2) },
-  { game: "liars", name: "Liar's Dice", stakes: [0.01, 0.02, 0.05, 0.08, 0.1, 0.25], fmt: v => v.toFixed(v < 0.1 ? 3 : 2) },
-  { game: "holdem", name: "Heads-up Hold'em", stakes: [0.2, 0.3, 0.4, 0.5], fmt: v => v.toFixed(2) },
-];
-/** Lobby strip: one tap joins the queue at that stake; live counts of players already waiting. */
-export function QuickMatch({ data }: { data: import("@/lib/lobby").Lobby | null }) {
-  return (
-    <section className="quick-match" aria-labelledby="qm-h">
-      <div className="sec-head"><h2 id="qm-h">Quick match</h2><p>One tap to join a heads-up table. No one there after 20 s? You can play the house instead, always clearly marked.</p></div>
-      <div className="qm-grid">
-        {QM.map(q => {
-          const by = data?.tables[q.game]?.by_stake ?? {};
-          return (
-            <div key={q.game} className="qm-row">
-              <h4>{q.name}</h4>
-              <div className="qm-stakes">
-                {q.stakes.map(v => { const n = by[String(Math.round(v * ZAT))] ?? 0; return (
-                  <a key={v} href={`/table/${q.game}?stake=${v}&quick=1`} className={`qm-stake ${n ? "hot" : ""}`} data-game={q.game} data-stake={v}>
-                    <b className="mono">ⓩ {q.fmt(v)}</b><small>{data ? (n ? `${n} waiting` : "open") : "…"}</small>
-                  </a>); })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}

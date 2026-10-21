@@ -1,5 +1,6 @@
 "use client";
 import { CloseX, backdropClose } from "./CloseX";
+import { FAUCET_URL } from "@/lib/errors";
 import { RecoveryCard, RestoreDialog, recoverySaved } from "./Recovery";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
@@ -74,6 +75,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
             {live ? <div className="mono addr">{address}</div> : <div className="addr-skel" role="status">{offline ? "Cashier offline. Deposits open when the wallet service is reachable." : <>Deriving your one-time address<span className="dots" /></>}</div>}
             <button className="btn ghost sm" disabled={!live} onClick={() => copy("a", address)}>{copied === "a" ? "Copied" : "Copy address"}</button>
             <button className="btn ghost sm" disabled={!live} onClick={() => copy("u", uri)}>{copied === "u" ? "Copied" : "Copy payment link"}</button>
+            <a className="faucet-link" href={FAUCET_URL} target="_blank" rel="noopener noreferrer"><b>Need TAZ?</b> Get free testnet TAZ from the public Zcash testnet faucet ↗ <small>Testnet only · TAZ has no real value</small></a>
             <ol className="steps">
               <li className={live ? "done" : ""}>Address derived for this session only; it identifies your deposit, no memo needed</li>
               {credited && <li className="done">{credited}</li>}

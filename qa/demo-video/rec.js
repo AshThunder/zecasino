@@ -63,7 +63,8 @@ const SCENES = {
       if (await cash.count()) { await click(p, cash, 120); mark("cashout"); console.log("CASHED"); } } catch {}
     await sleep(3000); }; },
   async blackjack(p) { await p.goto(BASE + "/table/blackjack"); await p.waitForLoadState("networkidle"); await sleep(1500);
-    const clr = p.getByRole("button", { name: "Clear" }); if (await clr.count()) await clr.click(); return async () => {
+    const clr = p.getByRole("button", { name: "Clear" }); if (await clr.count()) await clr.click();
+    await p.evaluate(() => scrollTo(0, 90)); await sleep(400); /* whole felt + rail in frame at 1080p */ return async () => {
     const rack = p.locator(".rack button"), circle = p.locator(".bet-circle");
     await click(p, rack.nth(3)); await click(p, circle); await click(p, rack.nth(2), 500); await click(p, circle); await sleep(200); await click(p, circle, 200);
     await click(p, p.getByRole("button", { name: "Deal" })); mark("deal"); await sleep(2600);
@@ -72,7 +73,7 @@ const SCENES = {
       const t = Number((await p.locator(".hand.player .hand-total").first().textContent().catch(() => "")).replace(/\D/g, "")) || 20;
       await click(p, t < 13 ? p.getByRole("button", { name: "Hit", exact: true }) : stand); await sleep(1900);
     }
-    mark("result"); await sleep(1800); await click(p, p.getByRole("button", { name: /Reveal seed/ }), 900); mark("verify"); await sleep(3200);
+    mark("result"); console.log("RESULT", (await p.locator(".result-toast").innerText().catch(() => "")).replace(/\n/g, " ")); await sleep(1800); await click(p, p.getByRole("button", { name: /Reveal seed/ }), 900); mark("verify"); await sleep(3200);
     const v = p.locator(".vrow").first(); if (await v.count()) await to(p, v, 700); await sleep(1500); }; },
   async solvency(p) { await p.goto(BASE + "/solvency"); await p.waitForLoadState("networkidle"); await sleep(1500); return async () => {
     await glide(p, 600, 350, 800); await sleep(800);
@@ -97,7 +98,7 @@ const SCENES = {
     await click(p, h); mark("vs-house"); await sleep(2500);
     const badge = p.locator(".house-badge").first(); if (await badge.count()) { await to(p, badge, 700); await sleep(1500); }
     // Best take for the narration: the house holds (peeks + bluffs), we are the guesser.
-    const role = await Promise.race([p.getByText("The house is peeking").first().waitFor({ timeout: 15000 }).then(() => "guesser"), p.getByRole("button", { name: "Peek inside" }).waitFor({ timeout: 15000 }).then(() => "holder")]).catch(() => "?");
+    const role = await Promise.race([p.getByText(/Guesser · listen/).first().waitFor({ timeout: 15000 }).then(() => "guesser"), p.getByRole("button", { name: "Peek inside" }).waitFor({ timeout: 15000 }).then(() => "holder")]).catch(() => "?");
     console.log("ROLE", role); if (role !== "guesser") return; mark("house-peeking");
     await p.getByText(/got the carrot|empty/i).first().waitFor({ timeout: 20000 }).catch(() => {}); mark("bluff"); await sleep(1500);
     await to(p, p.getByRole("button", { name: "Keep my box" }), 800); await sleep(900);

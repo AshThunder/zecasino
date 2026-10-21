@@ -281,13 +281,13 @@ async fn lobby(State(app): State<Arc<App>>) -> Json<Value> {
     // Coverage = cold reserve (checkable with its public viewing key) / liabilities, same as /solvency. Hot wallet reported separately.
     let a = app.anchor.lock().await.clone();
     let c = app.crash.lock().await; let crash_round = c.round; let crash_bettors = c.bets.len(); drop(c);
-    // Public queue only: private invite tables are not listed.
-    let by = |q: &Vec<Waiting>| { let mut m = serde_json::Map::new(); for w in q.iter().filter(|w| w.code.is_none()) { let e = m.entry(w.stake.to_string()).or_insert(json!(0)); *e = json!(e.as_u64().unwrap_or(0) + 1); } Value::Object(m) };
-    let (cw, lw, hw) = { let a = app.carrot_wait.lock().await; let b = app.liars_wait.lock().await; let c = app.holdem_wait.lock().await; ((a.iter().filter(|w| w.code.is_none()).count(), by(&a)), (b.iter().filter(|w| w.code.is_none()).count(), by(&b)), (c.iter().filter(|w| w.code.is_none()).count(), by(&c))) };
+    // Public queue only: private invite tables are not counted.
+    let public = |q: &Vec<Waiting>| q.iter().filter(|w| w.code.is_none()).count();
+    let (cw, lw, hw) = (public(&*app.carrot_wait.lock().await), public(&*app.liars_wait.lock().await), public(&*app.holdem_wait.lock().await));
     let tables = json!({
-        "carrot": { "rooms": app.carrots.lock().await.len(), "waiting": cw.0, "by_stake": cw.1 },
-        "liars": { "rooms": app.liars.lock().await.len(), "waiting": lw.0, "by_stake": lw.1 },
-        "holdem": { "rooms": app.holdems.lock().await.len(), "waiting": hw.0, "by_stake": hw.1 },
+        "carrot": { "rooms": app.carrots.lock().await.len(), "waiting": cw },
+        "liars": { "rooms": app.liars.lock().await.len(), "waiting": lw },
+        "holdem": { "rooms": app.holdems.lock().await.len(), "waiting": hw },
         "crash": { "round": crash_round, "bettors": crash_bettors },
     });
     Json(json!({ "demo": app.demo, "liabilities_zat": liab, "reserve_zat": reserve, "hot_zat": hot,

@@ -13,31 +13,25 @@ const leave = async s => { const b = s.p.getByRole("button", { name: "Leave queu
   for (const s of [A, B]) s.p.setDefaultTimeout(30000);
 
   if (which === "all" || which === "quick") {
-    // A taps a stake on the lobby strip; B sees the count on the lobby and on the table's stake chips.
+    // Quick Match was removed: no strip on the lobby, no per-stake counts on tables; the normal join still pairs players.
     await A.p.goto(q.BASE + "/", { waitUntil: "networkidle" });
-    await A.p.locator('.qm-stake[data-game="carrot"][data-stake="0.02"]').click();
-    const queued = await until(async () => (await A.p.locator(".waiting-scene").count()) > 0, 10000);
-    record("Quick match", "lobby stake tap opens the table and queues", !!queued);
-    const l = await until(async () => { const d = await lobby(); return d.tables.carrot.by_stake?.["2000000"] === 1 ? d : null; }, 8000);
-    record("Quick match", "/lobby by_stake counts the waiting player", !!l);
-    await B.p.goto(q.BASE + "/", { waitUntil: "networkidle" });
-    const strip = await until(async () => /1 waiting/.test(await B.p.locator('.qm-stake[data-game="carrot"][data-stake="0.02"]').innerText()), 8000);
-    record("Quick match", "lobby strip shows '1 waiting' at that stake", !!strip);
-    await B.p.goto(q.BASE + "/table/carrot", { waitUntil: "networkidle" });
-    const chip = await until(async () => /1 waiting/.test(await B.p.locator(".stake-pick").innerText()), 8000);
-    record("Quick match", "table stake picker shows '1 waiting'", !!chip);
-    await B.p.locator(".stake-pick button", { hasText: "0.020" }).click();
-    await B.p.getByRole("button", { name: /^Quick match/ }).click();
+    record("Join", "lobby has no Quick match strip", (await A.p.locator(".quick-match, .qm-stake").count()) === 0);
+    for (const s of [A, B]) { await s.p.goto(q.BASE + "/table/carrot", { waitUntil: "networkidle" }); await s.p.waitForTimeout(800); }
+    record("Join", "table has no Quick match / waiting counts", !/Quick match|waiting/i.test(await A.p.locator(".match-bar").innerText()));
+    for (const s of [A, B]) await s.p.locator(".stake-pick button", { hasText: "0.020" }).click();
+    await A.p.getByRole("button", { name: /^Sit down/ }).click(); await A.p.waitForTimeout(600);
+    record("Join", "waiting screen shows with Leave queue", await vis(A.p, "Leave queue"));
+    await B.p.getByRole("button", { name: /^Sit down/ }).click();
     const matched = await until(async () => (await A.p.locator(".waiting-scene").count()) === 0 && (await B.p.locator(".waiting-scene").count()) === 0 && (await vis(A.p, "Peek inside") || await vis(B.p, "Peek inside")), 15000);
-    record("Quick match", "one tap matches the two players at 0.02", !!matched);
-    await A.p.screenshot({ path: "../screenshots/after/pvp/quick-matched-desktop.png" }).catch(() => {});
+    record("Join", "pick a stake + Sit down pairs two players at 0.02", !!matched);
+    await A.p.screenshot({ path: "../screenshots/after/pvp/join-matched-desktop.png" }).catch(() => {});
   }
 
   if (which === "all" || which === "house") {
     for (const game of ["carrot", "liars", "holdem"]) {
       await A.p.goto(q.BASE + `/table/${game}`, { waitUntil: "networkidle" }); await A.p.waitForTimeout(800);
       if (game === "holdem") await A.p.locator(".stake-pick button", { hasText: "0.20" }).click();
-      await A.p.getByRole("button", { name: /^Quick (match|seat)/ }).click();
+      await A.p.getByRole("button", { name: /^Sit down/ }).click();
       const offer = await until(() => vis(A.p, "Play the house instead"), 30000);
       record("House", `${game}: offer appears after ~20 s alone`, !!offer);
       if (game === "carrot") await A.p.screenshot({ path: "../screenshots/after/pvp/house-offer-desktop.png" });
@@ -75,7 +69,7 @@ const leave = async s => { const b = s.p.getByRole("button", { name: "Leave queu
         record("House", "holdem: a hand completes vs house", !!hand);
         await A.p.screenshot({ path: "../screenshots/after/pvp/house-holdem-desktop.png" });
         await until(() => vis(A.p, "Leave table"), 10000); await A.p.getByRole("button", { name: "Leave table" }).click().catch(() => {});
-        await until(() => vis(A.p, /^Quick seat/), 15000);
+        await until(() => vis(A.p, /^Sit down/), 15000);
         record("House", "holdem: ledger reconcile after leaving", await q.reconcile(A, "house holdem"));
       }
     }
@@ -104,7 +98,7 @@ const leave = async s => { const b = s.p.getByRole("button", { name: "Leave queu
     // Liar's Dice between A and B (continuing from the invite round when run with "all").
     if (!(await vis(A.p, "Rematch"))) {
       for (const s of [A, B]) { await s.p.goto(q.BASE + "/table/liars", { waitUntil: "networkidle" }); await s.p.waitForTimeout(800); }
-      await A.p.getByRole("button", { name: /^Quick match/ }).click(); await A.p.waitForTimeout(500); await B.p.getByRole("button", { name: /^Quick match/ }).click();
+      await A.p.getByRole("button", { name: /^Sit down/ }).click(); await A.p.waitForTimeout(500); await B.p.getByRole("button", { name: /^Sit down/ }).click();
       await until(async () => { for (const s of [A, B]) { if (await vis(s.p, "Liar!")) await s.p.getByRole("button", { name: "Liar!" }).click().catch(() => {}); else if (await vis(s.p, "Bid")) await s.p.getByRole("button", { name: "Bid" }).click().catch(() => {}); } return (await vis(A.p, "Rematch")) && (await vis(B.p, "Rematch")); }, 30000);
     }
     await A.p.getByRole("button", { name: "Rematch" }).click();
@@ -128,13 +122,12 @@ const leave = async s => { const b = s.p.getByRole("button", { name: "Leave queu
     await q.toQa(m); await m.addInitScript(() => { try { localStorage.setItem("zc.howto.seen", "all"); } catch {} });
     const mp = await m.newPage();
     await mp.goto(q.BASE + "/", { waitUntil: "networkidle" }); await mp.waitForTimeout(1500);
-    await mp.locator(".quick-match").screenshot({ path: "../screenshots/after/pvp/lobby-quick-mobile.png" });
     await mp.goto(q.BASE + "/table/carrot", { waitUntil: "networkidle" }); await mp.waitForTimeout(1200);
     await mp.screenshot({ path: "../screenshots/after/pvp/carrot-matchbar-mobile.png" });
     await mp.getByRole("button", { name: "Private table" }).click(); await mp.waitForTimeout(1200);
     await mp.screenshot({ path: "../screenshots/after/pvp/invite-mobile.png" });
     await mp.getByRole("button", { name: "Leave queue" }).click(); await mp.waitForTimeout(500);
-    await mp.getByRole("button", { name: /^Quick match/ }).click();
+    await mp.getByRole("button", { name: /^Sit down/ }).click();
     if (await until(() => vis(mp, "Play the house instead"), 30000)) {
       await mp.screenshot({ path: "../screenshots/after/pvp/house-offer-mobile.png" });
       await mp.getByRole("button", { name: "Play the house instead" }).click(); await mp.waitForTimeout(2500);

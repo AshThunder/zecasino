@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
-import { useLobby } from "@/lib/lobby";
-import { DEMO, ZAT } from "@/lib/server";
+import { DEMO } from "@/lib/server";
 import type { Match } from "@/lib/pvp";
 import { HouseBadge } from "./Pvp";
 import { toast } from "@/lib/toast";
@@ -15,8 +14,7 @@ export function WaitingScene({ table, label, m, stake, fmt = (v: number) => v.to
   const root = useRef<HTMLDivElement>(null);
   const [t0] = useState(() => Date.now());
   const [now, setNow] = useState(t0);
-  const { data: lobby, offline } = useLobby(5000);
-  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
+    useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   useEffect(() => {
     const el = root.current; if (!el) return;
     const ctx = gsap.context(() => {
@@ -30,9 +28,6 @@ export function WaitingScene({ table, label, m, stake, fmt = (v: number) => v.to
     return () => ctx.revert();
   }, []);
   const s = Math.floor((now - t0) / 1000);
-  const room = lobby?.tables[table];
-  const atStake = stake !== undefined && room?.by_stake ? Math.max(0, (room.by_stake[String(Math.round(stake * ZAT))] ?? 0) - (m?.code ? 0 : 1)) : null;
-  const others = atStake ?? (room ? Math.max(0, room.waiting - 1) : null);
   const copy = () => { if (m?.link) navigator.clipboard?.writeText(m.link).then(() => toast({ kind: "success", title: "Invite link copied", body: "Send it to a friend. They join at your stake." })).catch(() => {}); };
   return (
     <div ref={root} className="waiting-scene" role="status" aria-live="polite">
@@ -51,7 +46,7 @@ export function WaitingScene({ table, label, m, stake, fmt = (v: number) => v.to
           <small>Table code</small><b className="mono" data-code={m.code}>{m.code}</b>
           <div className="ws-link"><input readOnly value={m.link ?? ""} aria-label="Invite link" onFocus={e => e.target.select()} className="mono" /><button className="btn gold sm" onClick={copy}>Copy link</button></div>
           <small>Stake ⓩ {stake !== undefined ? fmt(stake) : "–"} · your friend joins at this stake</small>
-        </div> : <p className="ws-live">{offline ? "Live queue stats unavailable" : others === null ? <span className="skel sm" /> : others > 0 ? `${others} other player${others === 1 ? "" : "s"} in the queue` : `${room!.rooms} table${room!.rooms === 1 ? "" : "s"} in play · you're first in the queue at this stake`}</p>}
+        </div> : <p className="ws-live">Matching you with the next player at this stake</p>}
         {m && !m.code && s >= HOUSE_AFTER_S && <div className="ws-house">
           <p><HouseBadge /> No one else is at this stake yet. You can play the casino instead: it is clearly marked as the house, never a person, and every result is checkable the same way.</p>
           <button className="btn gold" onClick={m.house}>Play the house instead</button>

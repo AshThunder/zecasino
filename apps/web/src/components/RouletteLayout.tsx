@@ -30,11 +30,12 @@ export function RouletteLayout({ bets, onBet, highlight }: { bets: Record<BetKey
             {lit && <rect x={c.x + 4} y={c.y + 4} width={c.w - 8} height={c.h - 8} fill="none" stroke="#F4B728" strokeWidth="3" className="lit" />}
             {c.key === "red" || c.key === "black"
               ? <path d={`M${c.x + c.w / 2} ${c.y + 13}l26 16-26 16-26-16z`} fill={c.key === "red" ? "#A8161F" : "#141416"} stroke="#E9DFC6" strokeWidth="1.5" />
-              : <text x={c.x + c.w / 2} y={c.y + c.h / 2} textAnchor="middle" dominantBaseline="central"
-                  transform={c.rot ? `rotate(-90 ${c.x + c.w / 2} ${c.y + c.h / 2})` : undefined}
-                  fontFamily="var(--font-display), serif" fontWeight="600" fontSize={c.key.startsWith("n:") ? 26 : 19} fill="#F3ECDD"
-                  style={c.key.startsWith("n:") && c.key !== "n:0" ? undefined : { letterSpacing: 1 }}>
-                  <tspan transform={c.key.startsWith("n:") ? "" : ""}>{c.label}</tspan>
+              : <text x={c.x + c.w / 2} y={c.y + c.h / 2 + 1} textAnchor="middle" dominantBaseline="central" className="lt"
+                  fontFamily="var(--font-body), Manrope, system-ui, sans-serif" fontWeight="800"
+                  fontSize={c.key.startsWith("n:") ? 40 : c.rot ? 16 : 24} fill="#FFFFFF"
+                  stroke="#00000099" strokeWidth={c.key.startsWith("n:") ? 3 : 2.5} paintOrder="stroke" strokeLinejoin="round"
+                  style={{ fontVariantNumeric: "tabular-nums", letterSpacing: c.key.startsWith("n:") ? -0.5 : c.rot ? 0 : 0.6 }}>
+                  {c.label}
                 </text>}
             {(bets[c.key] ?? []).map((v, i) => (
               <foreignObject key={i} x={c.x + c.w / 2 - 19} y={c.y + c.h / 2 - 19 - i * 4} width="38" height="38" pointerEvents="none">

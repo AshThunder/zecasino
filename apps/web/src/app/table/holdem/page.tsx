@@ -196,7 +196,7 @@ export default function Holdem() {
         <div className="pk-actions">
           {online === false && <span className="wait">Hold&apos;em is played between real players and needs the live game server.</span>}
           {online && !room && lastRoom && <RematchButton room={lastRoom} house={oppHouse} />}
-          {online && !room && <MatchBar game="holdem" stakes={BUY_INS} stake={stake} setStake={setStake} m={mm} fmt={v => v.toFixed(2)} quickLabel="Quick seat · buy in" />}
+          {online && !room && <MatchBar game="holdem" stakes={BUY_INS} stake={stake} setStake={setStake} m={mm} fmt={v => v.toFixed(2)} joinLabel="Sit down · buy in" />}
           {room && legal && <>
             <TurnClock clock={clock} mine auto={legal.check ? "auto check" : "auto fold"} />
             {legal.fold && <button className="btn ghost" onClick={() => act("fold")}>Fold</button>}
