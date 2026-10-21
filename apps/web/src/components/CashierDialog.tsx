@@ -13,7 +13,7 @@ export function CashierDialog({ open, onClose }: { open: boolean; onClose: () =>
   const uri = zip321(DEPOSIT.address, DEPOSIT.amount, DEPOSIT.memoTag);
 
   useEffect(() => {
-    QRCode.toDataURL(uri, { margin: 1, width: 440, errorCorrectionLevel: "M", color: { dark: "#14110A", light: "#FBF7EE" } }).then(setQr);
+    QRCode.toDataURL(uri, { margin: 1, width: 440, errorCorrectionLevel: "H", color: { dark: "#14110A", light: "#FBF7EE" } }).then(setQr);
   }, [uri]);
   useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal(); if (!open && d.open) d.close(); }, [open]);
 

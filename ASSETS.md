@@ -11,7 +11,7 @@
 | Dice faces, dice cup | apps/web/src/components/Die.tsx, DiceCup.tsx | Original SVG | MIT |
 | Felt texture | CSS/SVG feTurbulence noise | Original | MIT |
 | Roulette ball roll sound | synthesised at runtime with Web Audio (no file) | Original | MIT |
-| Fonts: Cormorant Garamond, Manrope | via next/font (self-hosted at build) | Google Fonts | SIL OFL 1.1 |
+| Fonts: Cormorant Garamond, Manrope | via @fontsource packages (self-hosted, no third-party requests) | Google Fonts / Fontsource | SIL OFL 1.1 |
 | Zcash ⓩ mark usage | brand reference | https://z.cash/brand | Zcash trademark guidelines; descriptive use, "not affiliated" note |
 
 Evaluated and not used: Kenney Playing Cards / Boardgame packs (CC0) — 64px sprites, too low-res for a premium table.

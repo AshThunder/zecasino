@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { CarrotBox } from "@/components/CarrotBox";
@@ -42,10 +42,14 @@ export default function CarrotTable() {
   });
   const reveal = contextSafe(() => {
     setPhase("reveal"); play("stack", 0.6);
-    gsap.timeline()
+  });
+  useEffect(() => {
+    if (phase !== "reveal") return;
+    const tl = gsap.timeline()
       .to([myLid.current, theirLid.current], { rotation: 72, svgOrigin: "232 92", duration: 0.8, ease: "power3.out", stagger: 0.15 })
       .fromTo(".has-carrot .carrot-in", { y: 70, opacity: 0 }, { y: -10, opacity: 1, duration: 0.7, ease: "back.out(1.6)" }, "-=0.3");
-  });
+    return () => { tl.kill(); };
+  }, [phase]);
   const reset = contextSafe(() => {
     gsap.to([myLid.current, theirLid.current], { rotation: 0, svgOrigin: "232 92", duration: 0.5 });
     gsap.to(".carrot-in", { opacity: 0, y: 60, duration: 0.3 });

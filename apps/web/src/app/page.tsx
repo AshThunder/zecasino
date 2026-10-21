@@ -10,7 +10,7 @@ const GAMES = [
   { id: "roulette", name: "European Roulette", kind: "House · single zero", why: "Seed committed before you bet; every spin verifiable.", stakes: "ⓩ 0.001 – 0.5", live: "Live", href: "/table/roulette" },
   { id: "blackjack", name: "Blackjack", kind: "House · 6 decks", why: "The whole shoe order is committed before the first card.", stakes: "ⓩ 0.005 – 0.5", live: "Live", href: "#" },
   { id: "dice", name: "Dice", kind: "House · over / under", why: "HMAC(server seed, your seed, nonce). Check it yourself.", stakes: "ⓩ 0.001 – 0.25", live: "Live", href: "#" },
-  { id: "crash", name: "Crash", kind: "House · multiplayer", why: "Cash out before it busts. Bettors are just session hashes.", stakes: "ⓩ 0.001 – 0.25", live: "Round 18,204", href: "#" },
+  { id: "crash", name: "Crash", kind: "House · multiplayer", why: "Cash out before it busts. Bettors are just session hashes.", stakes: "ⓩ 0.001 – 0.25", live: "Round 18,204", href: "#", wide: true },
 ];
 
 export default function Lobby() {
@@ -38,7 +38,7 @@ export default function Lobby() {
         <div className="sec-head"><h2 id="games-h">The floor</h2><p>Every game here has a reason to be private.</p></div>
         <div className="grid">
           {GAMES.map(g => (
-            <Link key={g.id} href={g.href} className={`tile ${g.feature ? "feature" : ""}`}>
+            <Link key={g.id} href={g.href} className={`tile ${g.feature ? "feature" : ""} ${"wide" in g && g.wide ? "wide" : ""}`}>
               <div className="tile-art"><TileArt game={g.id} /></div>
               <div className="tile-body">
                 <span className="kind">{g.kind}</span>
