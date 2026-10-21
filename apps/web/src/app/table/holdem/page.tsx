@@ -36,6 +36,10 @@ export default function Holdem() {
   const [result, setResult] = useState<Msg | null>(null);
   const [checks, setChecks] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState(0);
+  const [, tick] = useState(0);
+  useEffect(() => { if (!deadline) return; const i = setInterval(() => tick(t => t + 1), 250); return () => clearInterval(i); }, [deadline]);
   const k = useRef<{ sk: string; pks: Pk[]; joint: string; deck: Masked[] }>({ sk: "", pks: [], joint: "", deck: [] });
   const seatRef = useRef(0);
   const { contextSafe } = useGSAP({ scope });
@@ -57,7 +61,7 @@ export default function Holdem() {
       if (!alive) return; setOnline(!!c); if (!c) return;
       const ix = (m: Msg) => (m.by === "house" ? 0 : m.by === c.session?.anonHoldem ? -1 : 1);
       const on = (t: string, f: (m: Msg) => void) => offs.push(c.on(t, f));
-      on("hm_seated", m => { setSearching(false); setRoom(m.room); setSeat(m.seat); seatRef.current = m.seat; setOpp(m.opponent); });
+      on("hm_seated", m => { setSearching(false); setNotice(null); setRoom(m.room); setSeat(m.seat); seatRef.current = m.seat; setOpp(m.opponent); });
       on("hm_hand", m => { setHandNo(m.hand); setButton(m.button); setHole([]); setOppHole(null); setBoard([]); setResult(null); setSt(null); setSteps(["wait", "wait", "wait"]); setChecks([]); });
       on("hm_key_req", m => {
         const kp = mp.keygen(); k.current.sk = kp.sk; setMyKey(kp.pk.key);
@@ -102,7 +106,7 @@ export default function Holdem() {
         setHole(cards); play("card", 0.5); dealFx(".pk-seat.bottom .pcard");
         note("Your hole cards opened here, with your own key. Nobody else has seen them.");
       });
-      on("hm_state", m => { setSt(m); if (m.legal?.raise) setRaiseTo(m.legal.raise.min); if (m.legal) play("chip", 0.2); });
+      on("hm_state", m => { setSt(m); setDeadline(m.act_ms ? Date.now() + m.act_ms : 0); if (m.legal?.raise) setRaiseTo(m.legal.raise.min); if (m.legal) play("chip", 0.2); });
       on("hm_board", m => {
         const ok = (m.positions as number[]).every((p, i) => mp.unmask(k.current.deck[p], m.shares[p]) === m.cards[i]);
         note(ok ? `${["", "Flop", "Turn", "River"][m.street]} opened from 3 verified shares` : "BOARD SHARES DO NOT MATCH");
@@ -117,7 +121,7 @@ export default function Holdem() {
         }
         const won = m.winner === seatRef.current; play(won ? "stack" : "collide", 0.6);
       });
-      on("hm_closed", () => { setRoom(null); setSt(null); setHole([]); setBoard([]); setResult(null); });
+      on("hm_closed", m => { setNotice(m.reason ? `Table closed: ${m.reason}. ⓩ ${z(m.cashed_out)} returned to your balance.` : null); setRoom(null); setSt(null); setHole([]); setBoard([]); setResult(null); });
       on("error", m => setErr(m.error));
     })();
     return () => { alive = false; offs.forEach(f => f()); };
@@ -138,7 +142,8 @@ export default function Holdem() {
   const stacks = (result?.stacks ?? st?.stacks ?? [toZat(BUY_IN), toZat(BUY_IN)]) as number[];
   const handName = hole.length === 2 && board.length >= 3 ? best([...hole, ...board]).name : hole.length === 2 && hole[0] % 13 === hole[1] % 13 ? "Pocket pair" : "";
   const shuffleNames = ["House", seat === 0 ? "You" : `anon · ${opp}`, seat === 1 ? "You" : `anon · ${opp}`];
-  const resultText = result ? (result.winner === "split" ? "Split pot" : result.winner === me ? `You win ⓩ ${z(result.pot - result.rake)}${result.by === "showdown" ? ` with ${String(result.hands[me]).toLowerCase()}` : ""}` : `anon · ${opp} wins${result.by === "showdown" ? ` with ${String(result.hands[op]).toLowerCase()}` : ""}`) : null;
+  const resultText = result ? (result.winner === "split" ? "Split pot" : result.winner === me ? `You win ⓩ ${((result.pot - result.rake) / ZAT).toFixed(4)}${result.by === "showdown" ? ` with ${String(result.hands[me]).toLowerCase()}` : result.by === "forfeit" ? " · opponent withheld card shares" : ""}` : `anon · ${opp} wins${result.by === "showdown" ? ` with ${String(result.hands[op]).toLowerCase()}` : result.by === "forfeit" ? " · you forfeited by not sending card shares" : ""}`) : null;
+  const left = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0;
 
   return (
     <div ref={scope} className="table-page holdem-page">
@@ -154,13 +159,15 @@ export default function Holdem() {
             <div className="board">
               {Array.from({ length: 5 }, (_, i) => <div key={i} className="board-slot">{board[i] !== undefined ? <PlayingCard code={code(board[i])} width={84} /> : null}</div>)}
             </div>
-            <div className="pk-pot"><ChipStack values={[0.01, 0.01, 0.005]} size={40} /><span>Pot ⓩ {z(result?.pot ?? st?.pot ?? 0)}</span></div>
+            {resultText
+              ? <div className="result-toast inline" role="status"><span>{resultText}{result?.rake ? <small> · rake ⓩ {(result.rake / ZAT).toFixed(4)}</small> : null}</span></div>
+              : <div className="pk-pot"><ChipStack values={[0.01, 0.01, 0.005]} size={40} /><span>Pot ⓩ {z(st?.pot ?? 0)}</span></div>}
             <div className="felt-mark">ZECASINO</div>
             <div className="pk-seat bottom">
               <div className="pk-hole">{room && (hole.length ? hole : [-1, -1]).map((c, i) => <PlayingCard key={i} code={c >= 0 ? code(c) : "AS"} faceUp={c >= 0} width={84} />)}</div>
               <Chip value={0.5} size={44} id="pk-me" /><div><b>You</b><small>ⓩ {z(stacks[me])}{button === me && room ? " · dealer" : ""}{handName ? ` · ${handName}` : ""}</small></div>
             </div>
-            {resultText && <div className="result-toast" role="status"><span>{resultText}{result?.rake ? <small> · rake ⓩ {z(result.rake)}</small> : null}</span></div>}
+            {notice && !room && <div className="result-toast" role="status"><span>{notice}</span></div>}
             {err && <div className="result-toast" role="alert"><span>{err}</span></div>}
           </div>
         </div>
@@ -168,12 +175,13 @@ export default function Holdem() {
           {online === false && <span className="wait">Hold&apos;em is played between real players and needs the live game server.</span>}
           {online && !room && <button className="btn gold lg" onClick={sit} disabled={searching}>{searching ? "Finding a player…" : `Sit down · buy in ⓩ ${BUY_IN.toFixed(2)}`}</button>}
           {room && legal && <>
+            <span className={`act-clock ${left <= 5 ? "low" : ""}`} title="Auto check, or fold if there is a bet, when the clock runs out">{left}s</span>
             {legal.fold && <button className="btn ghost" onClick={() => act("fold")}>Fold</button>}
             {legal.check ? <button className="btn ghost" onClick={() => act("check")}>Check</button> : <button className="btn ghost" onClick={() => act("call")}>Call ⓩ {z(legal.call)}</button>}
             {legal.raise && <><label className="raise"><span>{legal.check ? "Bet" : "Raise to"}</span><input type="range" min={legal.raise.min} max={legal.raise.max} step={toZat(0.005)} value={raiseTo} onChange={e => setRaiseTo(+e.target.value)} /><b>ⓩ {z(raiseTo)}</b></label>
               <button className="btn gold" onClick={() => act("raise")}>{raiseTo === legal.raise.max ? "All in" : legal.check ? "Bet" : "Raise"}</button></>}
           </>}
-          {room && !legal && !result && <span className="wait">{steps.some(s => s !== "done") ? "Shuffling the deck…" : hole.length ? `anon · ${opp} to act…` : "Dealing…"}</span>}
+          {room && !legal && !result && <span className="wait">{steps.some(s => s !== "done") ? "Shuffling the deck…" : hole.length ? `anon · ${opp} to act… ${st?.to_act === op && left ? `${left}s` : ""}` : "Dealing…"}</span>}
           {room && result && <><span className="wait">Next hand in a few seconds…</span><button className="btn ghost" onClick={leave}>Leave table</button></>}
         </div>
       </div>

@@ -452,3 +452,7 @@ html:has(.cashier[open]) { overflow: hidden; }
 .sol-foot { margin-top: 18px; font-size: 13px; color: #8E8676; max-width: 900px; }
 .table-page.solvency-page { display: block; }
 .solvency-page .sol-tree dd { word-break: break-all; }
+.holdem-page .result-toast.inline { position: static; translate: none; margin-top: 14px; font-family: var(--font-display); font-size: 1.15rem; }
+.act-clock { font-family: var(--font-mono); min-width: 48px; text-align: center; padding: 8px 10px; border-radius: 999px; border: 1px solid #F4B72866; color: var(--gold-hi); }
+.act-clock.low { border-color: #E0414B; color: #FF7A80; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .55; } }

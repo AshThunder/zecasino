@@ -261,7 +261,9 @@ impl App {
         };
         // 2% rake, only on hands that saw a flop.
         let rake = if saw_flop { let pot = 2 * b.contrib[0].min(b.contrib[1]); pot - pvp::pot_after_rake(pot) } else { 0 };
-        if rake > 0 { let w = if pay[0] >= pay[1] { 0 } else { 1 }; pay[w] -= rake.min(pay[w]); }
+        // The rake comes out of the pot, so it is paid by whoever takes the pot; a split pot shares it.
+        let won = [pay[0] > b.stacks[0], pay[1] > b.stacks[1]];
+        match won { [true, true] => { pay[0] -= rake / 2; pay[1] -= rake - rake / 2; } [false, true] => pay[1] -= rake.min(pay[1]), _ => pay[0] -= rake.min(pay[0]) }
         r.stacks = pay; h.phase = Phase::Done;
         let mut msg = json!({ "t": "hm_result", "room": id, "stacks": pay, "pot": b.pot(), "rake": rake, "board": h.board, "log": h.log });
         msg.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
